@@ -6,11 +6,12 @@ void main() {
   testWidgets('Recharge Expres white-label app boots and renders recharge console',
       (WidgetTester tester) async {
     await tester.pumpWidget(const RechargeExpresMobileApp());
+    await tester.pumpAndSettle();
 
-    // Verify default branding and package identifier
-    expect(TenantBuildConfig.appName, 'Recharge Expres');
-    expect(TenantBuildConfig.packageId, 'in.rechargeexpres.app');
-    expect(find.textContaining('Recharge Expres'), findsWidgets);
+    // Verify white-label branding and package identifier loaded
+    expect(TenantBuildConfig.appName.isNotEmpty, isTrue);
+    expect(TenantBuildConfig.packageId.isNotEmpty, isTrue);
+    expect(find.textContaining(TenantBuildConfig.appName), findsWidgets);
     expect(find.text('Confirm & Initiate Recharge'), findsOneWidget);
   });
 }

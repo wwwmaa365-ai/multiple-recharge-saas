@@ -86,13 +86,22 @@ jobs:
       - name: 4. Scaffold Platform Runner & Preserve White-Label Android Config
         run: |
           if [ ! -f "android/gradlew" ]; then
-            echo "Backing up white-label build.gradle and AndroidManifest.xml before scaffolding..."
-            cp android/app/build.gradle /tmp/wl_build.gradle
-            cp android/app/src/main/AndroidManifest.xml /tmp/wl_AndroidManifest.xml
+            echo "Backing up white-label Dart source, tests, build.gradle, and AndroidManifest.xml before scaffolding..."
+            mkdir -p /tmp/rx_android_backup
+            cp -r lib /tmp/rx_android_backup/lib
+            cp -r test /tmp/rx_android_backup/test
+            cp pubspec.yaml /tmp/rx_android_backup/pubspec.yaml
+            cp analysis_options.yaml /tmp/rx_android_backup/analysis_options.yaml
+            cp android/app/build.gradle /tmp/rx_android_backup/build.gradle
+            cp android/app/src/main/AndroidManifest.xml /tmp/rx_android_backup/AndroidManifest.xml
             flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android,ios .
             rm -f android/app/build.gradle.kts
-            cp /tmp/wl_build.gradle android/app/build.gradle
-            cp /tmp/wl_AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            cp -r /tmp/rx_android_backup/lib/* lib/
+            cp -r /tmp/rx_android_backup/test/* test/
+            cp /tmp/rx_android_backup/pubspec.yaml pubspec.yaml
+            cp /tmp/rx_android_backup/analysis_options.yaml analysis_options.yaml
+            cp /tmp/rx_android_backup/build.gradle android/app/build.gradle
+            cp /tmp/rx_android_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             chmod +x android/gradlew
           fi
 

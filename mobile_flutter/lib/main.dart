@@ -308,6 +308,14 @@ class _MobileRootShellState extends State<MobileRootShell> {
     );
   }
 
+  @override
+  void dispose() {
+    _numberController.dispose();
+    _amountController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
   Widget _buildHomeAndRechargeTab(Color brandColor) {
     final categories = [
       'Mobile Prepaid',
@@ -329,7 +337,7 @@ class _MobileRootShellState extends State<MobileRootShell> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: brandColor.withValues(alpha: 0.1),
+              color: brandColor.withAlpha(26),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: brandColor),
             ),
@@ -346,7 +354,7 @@ class _MobileRootShellState extends State<MobileRootShell> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: categories.map((cat) => {
+          children: categories.map((cat) {
             final selected = _activeCategory == cat;
             return ChoiceChip(
               label: Text(cat, style: const TextStyle(fontSize: 12)),
@@ -383,43 +391,50 @@ class _MobileRootShellState extends State<MobileRootShell> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedOperator,
+                InputDecorator(
                   decoration: const InputDecoration(
                     labelText: 'Select Telecom / BBPS Operator',
                     border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'JIO_PREPAID',
-                      child: Text('Reliance Jio'),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedOperator,
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'JIO_PREPAID',
+                          child: Text('Reliance Jio'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'AIRTEL_PREPAID',
+                          child: Text('Airtel'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'VI_PREPAID',
+                          child: Text('Vi (Vodafone Idea)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'BSNL_TOPUP',
+                          child: Text('BSNL'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'TATAPLAY_DTH',
+                          child: Text('Tata Play DTH'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'WBSEDCL_EBILL',
+                          child: Text('WBSEDCL Electricity (BBPS)'),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedOperator = val);
+                        }
+                      },
                     ),
-                    DropdownMenuItem(
-                      value: 'AIRTEL_PREPAID',
-                      child: Text('Airtel'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'VI_PREPAID',
-                      child: Text('Vi (Vodafone Idea)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'BSNL_TOPUP',
-                      child: Text('BSNL'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'TATAPLAY_DTH',
-                      child: Text('Tata Play DTH'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'WBSEDCL_EBILL',
-                      child: Text('WBSEDCL Electricity (BBPS)'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedOperator = val);
-                    }
-                  },
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(

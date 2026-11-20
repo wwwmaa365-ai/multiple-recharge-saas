@@ -77,15 +77,24 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 3. Scaffold Missing iOS Platform Runner Files & Preserve Info.plist
+      - name: 3. Scaffold Missing iOS Platform Runner Files & Preserve White-Label Source
         run: |
           if [ ! -d "ios/Runner.xcodeproj" ]; then
-            echo "Backing up white-label Info.plist and ExportOptions.plist before scaffolding..."
-            cp ios/Runner/Info.plist /tmp/wl_Info.plist
-            cp ios/ExportOptions.plist /tmp/wl_ExportOptions.plist
+            echo "Backing up white-label Dart source, tests, Info.plist, and ExportOptions.plist before scaffolding..."
+            mkdir -p /tmp/rx_ios_backup
+            cp -r lib /tmp/rx_ios_backup/lib
+            cp -r test /tmp/rx_ios_backup/test
+            cp pubspec.yaml /tmp/rx_ios_backup/pubspec.yaml
+            cp analysis_options.yaml /tmp/rx_ios_backup/analysis_options.yaml
+            cp ios/Runner/Info.plist /tmp/rx_ios_backup/Info.plist
+            cp ios/ExportOptions.plist /tmp/rx_ios_backup/ExportOptions.plist
             flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android,ios .
-            cp /tmp/wl_Info.plist ios/Runner/Info.plist
-            cp /tmp/wl_ExportOptions.plist ios/ExportOptions.plist
+            cp -r /tmp/rx_ios_backup/lib/* lib/
+            cp -r /tmp/rx_ios_backup/test/* test/
+            cp /tmp/rx_ios_backup/pubspec.yaml pubspec.yaml
+            cp /tmp/rx_ios_backup/analysis_options.yaml analysis_options.yaml
+            cp /tmp/rx_ios_backup/Info.plist ios/Runner/Info.plist
+            cp /tmp/rx_ios_backup/ExportOptions.plist ios/ExportOptions.plist
           fi
           plutil -replace CFBundleDisplayName -string "${{ env.APP_NAME }}" ios/Runner/Info.plist || true
           plutil -replace CFBundleIdentifier -string "${{ env.BUNDLE_ID }}" ios/Runner/Info.plist || true
@@ -124,6 +133,7 @@ jobs:
 
             mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
             cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+            plutil -replace teamID -string "$APPLE_TEAM_ID" ios/ExportOptions.plist || plutil -insert teamID -string "$APPLE_TEAM_ID" ios/ExportOptions.plist || true
 
             echo "signed=true" >> $GITHUB_OUTPUT
             echo "IOS_SIGNING_STATUS=SIGNED_DISTRIBUTABLE_IPA" >> $GITHUB_ENV

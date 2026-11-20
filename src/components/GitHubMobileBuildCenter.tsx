@@ -1087,6 +1087,20 @@ export const GitHubMobileBuildCenter: React.FC<GitHubMobileBuildCenterProps> = (
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 <tr>
                   <td className="py-2.5 px-3 font-mono text-red-600 dark:text-red-400">
+                    loading .../mobile_flutter/test/widget_test.dart (failed) — line 26 {'}).toList(),'} ^ Error: 0 tests passed, 1 failed
+                  </td>
+                  <td className="py-2.5 px-3 font-mono">
+                    mobile_flutter/lib/main.dart &amp; mobile_flutter/test/widget_test.dart
+                  </td>
+                  <td className="py-2.5 px-3">
+                    Line 349 in <code className="font-mono">main.dart</code> used JavaScript arrow syntax <code className="font-mono">categories.map((cat) =&gt; {'{'}</code> instead of Dart closure syntax <code className="font-mono">categories.map((cat) {'{'}</code>, causing Dart to treat the block as a Set literal and fail compilation during <code className="font-mono">flutter test</code>.
+                  </td>
+                  <td className="py-2.5 px-3">
+                    Fixed <code className="font-mono">categories.map((cat) {'{'} ... {'}'}).toList()</code> in <code className="font-mono">lib/main.dart</code>, replaced <code className="font-mono">withValues</code> with universal <code className="font-mono">withAlpha(26)</code>, replaced <code className="font-mono">DropdownButtonFormField</code> with <code className="font-mono">InputDecorator + DropdownButton</code>, and backed up <code className="font-mono">lib/</code> &amp; <code className="font-mono">test/</code> during <code className="font-mono">flutter create</code> scaffolding.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 px-3 font-mono text-red-600 dark:text-red-400">
                     flutter create overwrites white-label build.gradle &amp; AndroidManifest.xml
                   </td>
                   <td className="py-2.5 px-3 font-mono">.github/workflows/android-build.yml</td>
