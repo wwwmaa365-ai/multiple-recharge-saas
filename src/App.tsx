@@ -2172,6 +2172,20 @@ function MasterPlatformWorkspace() {
             <GitHubMobileBuildCenter
               selectedTenant={selectedTenantContext}
               allTenants={simulatedTenants}
+              currentUser={user}
+              onUpdateSimulatedTenant={handleUpdateSimulatedTenant}
+              onCreateSimulatedTenant={(created) => {
+                setSimulatedTenants((prev) => [
+                  created,
+                  ...prev.filter((t) => t.tenantId !== created.tenantId),
+                ]);
+                setActiveTenantId(created.tenantId);
+                setHostInput(created.customDomain);
+              }}
+              onOpenFullCreateClientModal={() => {
+                setEditingClientDoc(null);
+                setIsCreateClientModalOpen(true);
+              }}
               onSelectTenant={(nextId) => {
                 setActiveTenantId(nextId);
                 const found = simulatedTenants.find((t) => t.tenantId === nextId);

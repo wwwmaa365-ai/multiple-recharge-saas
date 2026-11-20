@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'White-Label Application Display Name'
+        description: 'White-Label Application Display Name (APP_NAME)'
         required: true
         default: 'Recharge Expres'
       package_id:
-        description: 'Android Application ID / Package Name'
+        description: 'Android Application ID / Package Name (PACKAGE_ID)'
         required: true
         default: 'in.rechargeexpres.app'
       tenant_id:
@@ -29,6 +29,26 @@ on:
         description: 'Brand Primary Hex Color (without #)'
         required: true
         default: '4F46E5'
+      secondary_color_hex:
+        description: 'Brand Secondary Hex Color (without #)'
+        required: false
+        default: '0F172A'
+      logo_text:
+        description: 'Client Brand Logo Wordmark / Initials'
+        required: false
+        default: 'RX'
+      api_base_url:
+        description: 'Isolated Tenant Backend Gateway URL (No secrets)'
+        required: false
+        default: 'https://rechargeexpres.in/api/v1'
+      version_name:
+        description: 'Semantic APK Release Version (VERSION_NAME, e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+      version_code:
+        description: 'Monotonic Android Version Code (VERSION_CODE, e.g. 1)'
+        required: false
+        default: '1'
       environment:
         description: 'Build Environment (production or development)'
         required: true
@@ -57,11 +77,16 @@ env:
   TENANT_ID: ${{ github.event.inputs.tenant_id || 'tenant_master_platform' }}
   TENANT_DOMAIN: ${{ github.event.inputs.tenant_domain || 'rechargeexpres.in' }}
   PRIMARY_COLOR_HEX: ${{ github.event.inputs.primary_color_hex || '4F46E5' }}
+  SECONDARY_COLOR_HEX: ${{ github.event.inputs.secondary_color_hex || '0F172A' }}
+  LOGO_TEXT: ${{ github.event.inputs.logo_text || 'RX' }}
+  API_BASE_URL: ${{ github.event.inputs.api_base_url || 'https://rechargeexpres.in/api/v1' }}
+  VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}
+  VERSION_CODE: ${{ github.event.inputs.version_code || '1' }}
   APP_ENV: ${{ github.event.inputs.environment || 'production' }}
 
 jobs:
   build-android:
-    name: Build White-Label Android APK & AAB
+    name: Build White-Label Android APK & AAB (Gradle + Flutter)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,7 +96,7 @@ jobs:
       - name: 1. Checkout Repository Source Code
         uses: actions/checkout@v4
 
-      - name: 2. Install Java JDK 17
+      - name: 2. Install Java JDK 17 for Android Gradle Build Tools
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -84,9 +109,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 4. Scaffold Platform Runner & Apply White-Label Android Config
+      - name: 4. Validate PACKAGE_ID, Scaffold Android Gradle Runner & Apply build.gradle
         run: |
-          echo "Accepting Android SDK licenses and cleaning any broken runner NDK stubs..."
+          echo "Validating Android Application ID (PACKAGE_ID=${PACKAGE_ID})..."
+          if ! echo "${PACKAGE_ID}" | grep -Eq '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2,}$'; then
+            echo "ERROR: Invalid Android Package ID '${PACKAGE_ID}'. Must have at least 3 dot-separated lowercase segments (e.g. in.rechargeexpres.app)."
+            exit 1
+          fi
+
+          echo "Accepting Android SDK licenses and cleaning any incomplete runner NDK directories..."
           yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
           if [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
             for ndk_dir in "$ANDROID_HOME/ndk"/*; do
@@ -97,40 +128,38 @@ jobs:
             done
           fi
 
-          echo "Backing up white-label Dart source and tests before scaffolding..."
+          echo "Backing up white-label Dart source, tests, and custom build.gradle..."
           mkdir -p /tmp/rx_android_backup
           cp -r lib /tmp/rx_android_backup/lib
           cp -r test /tmp/rx_android_backup/test
           cp pubspec.yaml /tmp/rx_android_backup/pubspec.yaml
           cp analysis_options.yaml /tmp/rx_android_backup/analysis_options.yaml
+          if [ -f "android/app/build.gradle" ]; then
+            cp android/app/build.gradle /tmp/rx_android_backup/app_build.gradle
+          fi
 
-          # Remove partial android/ folder so flutter create generates a 100% consistent Gradle project for this Flutter SDK
+          # Scaffold clean Android Gradle wrapper & platform project matched to Flutter 3.24.5
           rm -rf android
           flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android .
 
-          # Restore white-label Dart source and tests
+          # Restore white-label Dart source, tests, and build.gradle (with PACKAGE_ID, APP_NAME & key.properties support)
           cp -r /tmp/rx_android_backup/lib/* lib/
           cp -r /tmp/rx_android_backup/test/* test/
           cp /tmp/rx_android_backup/pubspec.yaml pubspec.yaml
           cp /tmp/rx_android_backup/analysis_options.yaml analysis_options.yaml
+          if [ -f "/tmp/rx_android_backup/app_build.gradle" ]; then
+            rm -f android/app/build.gradle.kts
+            cp /tmp/rx_android_backup/app_build.gradle android/app/build.gradle
+          fi
 
-          # Configure CI-optimized Gradle memory & daemon settings for GitHub Actions ubuntu-latest (7GB RAM)
+          # Configure CI-optimized Gradle memory & daemon properties
           printf "org.gradle.jvmargs=-Xmx3584M -XX:MaxMetaspaceSize=1G -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\nandroid.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.daemon=false\norg.gradle.parallel=true\n" > android/gradle.properties
 
-          # Inject white-label PACKAGE_ID into the generated build.gradle.kts or build.gradle
-          if [ -f "android/app/build.gradle.kts" ]; then
-            sed -i 's|applicationId = "in.rechargeexpres.recharge_expres_mobile"|applicationId = "'"${PACKAGE_ID}"'"|g' android/app/build.gradle.kts
-          fi
-          if [ -f "android/app/build.gradle" ]; then
-            sed -i 's|applicationId "in.rechargeexpres.recharge_expres_mobile"|applicationId "'"${PACKAGE_ID}"'"|g' android/app/build.gradle
-            sed -i 's|applicationId = "in.rechargeexpres.recharge_expres_mobile"|applicationId = "'"${PACKAGE_ID}"'"|g' android/app/build.gradle
-          fi
-
-          # Inject white-label APP_NAME into the generated AndroidManifest.xml
-          sed -i 's|android:label="recharge_expres_mobile"|android:label="'"${APP_NAME}"'"|g' android/app/src/main/AndroidManifest.xml
+          # Bind AndroidManifest.xml label to manifestPlaceholders[appName] / APP_NAME
+          sed -i 's|android:label="recharge_expres_mobile"|android:label="${APP_NAME}"|g' android/app/src/main/AndroidManifest.xml
           chmod +x android/gradlew
 
-      - name: 5. Configure Android Release Signing (GitHub Secrets Check)
+      - name: 5. Configure Android Release Keystore Signing (key.properties & upload-keystore.jks)
         id: signing_check
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -139,15 +168,16 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
-            echo "Production Android signing secrets detected. Decoding release keystore..."
+            echo "Production Android signing secrets detected. Creating android/app/upload-keystore.jks and android/key.properties..."
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
             printf "storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n" \
               "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
             echo "signed=true" >> $GITHUB_OUTPUT
             echo "SIGNING_STATUS=PRODUCTION_SIGNED_RELEASE" >> $GITHUB_ENV
           else
-            echo "WARNING: Android signing secrets (ANDROID_KEYSTORE_BASE64, etc.) are NOT configured."
-            echo "Proceeding with UNSIGNED / DEBUG-KEY TESTING build. This artifact is for testing only and NOT Play Store ready."
+            echo "WARNING: Android signing secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) are NOT configured."
+            echo "build.gradle will fall back to signingConfigs.debug. Artifact is marked UNSIGNED_TESTING_BUILD_NOT_PLAY_STORE_READY."
+            rm -f android/key.properties android/app/upload-keystore.jks
             echo "signed=false" >> $GITHUB_OUTPUT
             echo "SIGNING_STATUS=UNSIGNED_TESTING_BUILD_NOT_PLAY_STORE_READY" >> $GITHUB_ENV
           fi
@@ -161,15 +191,27 @@ jobs:
       - name: 8. Run Automated Flutter Tests
         run: flutter test
 
-      - name: 9. Build Release APK
+      - name: 9. Build Release APK with Android Gradle & Environment Variables
+        env:
+          PACKAGE_ID: ${{ env.PACKAGE_ID }}
+          APP_NAME: ${{ env.APP_NAME }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: |
           set -o pipefail
           if ! flutter build apk --release --no-tree-shake-icons \
+            --build-name="${{ env.VERSION_NAME }}" \
+            --build-number="${{ env.VERSION_CODE }}" \
             --dart-define=APP_NAME="${{ env.APP_NAME }}" \
             --dart-define=PACKAGE_ID="${{ env.PACKAGE_ID }}" \
             --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
             --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
             --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
+            --dart-define=SECONDARY_COLOR_HEX="${{ env.SECONDARY_COLOR_HEX }}" \
+            --dart-define=LOGO_TEXT="${{ env.LOGO_TEXT }}" \
+            --dart-define=API_BASE_URL="${{ env.API_BASE_URL }}" \
+            --dart-define=VERSION_NAME="${{ env.VERSION_NAME }}" \
+            --dart-define=VERSION_CODE="${{ env.VERSION_CODE }}" \
             --dart-define=APP_ENV="${{ env.APP_ENV }}" 2>&1 | tee /tmp/apk_build.log; then
             echo "===================================================="
             echo "EXACT GRADLE FAILURE SUMMARY (MOBILE VIEW):"
@@ -178,15 +220,27 @@ jobs:
             exit 1
           fi
 
-      - name: 10. Build Release App Bundle (AAB)
+      - name: 10. Build Release App Bundle (AAB) with Android Gradle & Environment Variables
+        env:
+          PACKAGE_ID: ${{ env.PACKAGE_ID }}
+          APP_NAME: ${{ env.APP_NAME }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: |
           set -o pipefail
           if ! flutter build appbundle --release --no-tree-shake-icons \
+            --build-name="${{ env.VERSION_NAME }}" \
+            --build-number="${{ env.VERSION_CODE }}" \
             --dart-define=APP_NAME="${{ env.APP_NAME }}" \
             --dart-define=PACKAGE_ID="${{ env.PACKAGE_ID }}" \
             --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
             --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
             --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
+            --dart-define=SECONDARY_COLOR_HEX="${{ env.SECONDARY_COLOR_HEX }}" \
+            --dart-define=LOGO_TEXT="${{ env.LOGO_TEXT }}" \
+            --dart-define=API_BASE_URL="${{ env.API_BASE_URL }}" \
+            --dart-define=VERSION_NAME="${{ env.VERSION_NAME }}" \
+            --dart-define=VERSION_CODE="${{ env.VERSION_CODE }}" \
             --dart-define=APP_ENV="${{ env.APP_ENV }}" 2>&1 | tee /tmp/aab_build.log; then
             echo "===================================================="
             echo "EXACT GRADLE AAB FAILURE SUMMARY (MOBILE VIEW):"
@@ -213,12 +267,13 @@ jobs:
 
       - name: 13. Display Build Summary & Signing Verdict
         run: |
-          echo "### Recharge Expres Android Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Application Name**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package ID**: \`${{ env.PACKAGE_ID }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Recharge Expres Android Gradle Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application Name (`APP_NAME`)**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package ID (`PACKAGE_ID`)**: \`${{ env.PACKAGE_ID }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`v${{ env.VERSION_NAME }} (Code ${{ env.VERSION_CODE }})\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Tenant ID**: \`${{ env.TENANT_ID }}\` (\`${{ env.TENANT_DOMAIN }}\`)" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: \`${{ env.APP_ENV }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Signing Status**: \`${{ env.SIGNING_STATUS }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Keystore Signing Verdict**: \`${{ env.SIGNING_STATUS }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **APK Output**: \`build/app/outputs/flutter-apk/app-release.apk\`" >> $GITHUB_STEP_SUMMARY
           echo "- **AAB Output**: \`build/app/outputs/bundle/release/app-release.aab\`" >> $GITHUB_STEP_SUMMARY
 
@@ -231,6 +286,7 @@ jobs:
           body: |
             Automated White-Label Build for **${{ env.APP_NAME }}** (`${{ env.PACKAGE_ID }}`).
             - Tenant Domain: `${{ env.TENANT_DOMAIN }}`
+            - Version: `v${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})`
             - Signing Verdict: `${{ env.SIGNING_STATUS }}`
           files: |
             ${{ env.FLUTTER_WORKING_DIR }}/build/app/outputs/flutter-apk/app-release.apk

@@ -30,6 +30,31 @@ class TenantBuildConfig {
     defaultValue: '4F46E5',
   );
 
+  static const String secondaryColorHex = String.fromEnvironment(
+    'SECONDARY_COLOR_HEX',
+    defaultValue: '0F172A',
+  );
+
+  static const String logoText = String.fromEnvironment(
+    'LOGO_TEXT',
+    defaultValue: 'RX',
+  );
+
+  static const String versionName = String.fromEnvironment(
+    'VERSION_NAME',
+    defaultValue: '1.0.0',
+  );
+
+  static const String versionCode = String.fromEnvironment(
+    'VERSION_CODE',
+    defaultValue: '1',
+  );
+
+  static const String configuredApiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
+
   static const String appEnv = String.fromEnvironment(
     'APP_ENV',
     defaultValue: 'production',
@@ -37,13 +62,24 @@ class TenantBuildConfig {
 
   static bool get isProduction => appEnv == 'production';
 
-  static String get apiBaseUrl => isProduction
-      ? 'https://$tenantDomain/api/v1'
-      : 'https://dev.$tenantDomain/api/v1';
+  static String get apiBaseUrl {
+    if (configuredApiBaseUrl.trim().isNotEmpty) {
+      return configuredApiBaseUrl.trim();
+    }
+    return isProduction
+        ? 'https://$tenantDomain/api/v1'
+        : 'https://dev.$tenantDomain/api/v1';
+  }
 
   static Color get primaryBrandColor {
     final cleaned = primaryColorHex.replaceAll('#', '').trim();
     final parsed = int.tryParse('FF$cleaned', radix: 16);
     return Color(parsed ?? 0xFF4F46E5);
+  }
+
+  static Color get secondaryBrandColor {
+    final cleaned = secondaryColorHex.replaceAll('#', '').trim();
+    final parsed = int.tryParse('FF$cleaned', radix: 16);
+    return Color(parsed ?? 0xFF0F172A);
   }
 }

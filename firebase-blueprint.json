@@ -502,6 +502,44 @@
         "logId", "tenantId", "actorUid", "actorEmail", "action",
         "targetResource", "details", "createdAt"
       ]
+    },
+    "ApkBuild": {
+      "title": "ApkBuild",
+      "description": "24. White-label Android APK and iOS IPA build record, version metadata, SHA-256 checksum, and build log summary scoped to a client tenant.",
+      "type": "object",
+      "properties": {
+        "buildId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "appName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "androidPackageId": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "iosBundleId": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "appVersion": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "versionCode": { "type": "integer" },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "secondaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "logoText": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "customDomain": { "type": "string", "minLength": 4, "maxLength": 120 },
+        "apiBaseUrl": { "type": "string", "minLength": 8, "maxLength": 250 },
+        "signingMode": { "type": "string", "enum": ["debug_testing_key", "production_keystore"] },
+        "signingVerdict": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "buildEngine": { "type": "string", "enum": ["instant_gradle_container", "github_actions_cloud"] },
+        "status": { "type": "string", "enum": ["queued", "building", "succeeded", "failed"] },
+        "sha256Fingerprint": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "apkFileName": { "type": "string", "minLength": 4, "maxLength": 180 },
+        "apkSizeBytes": { "type": "integer" },
+        "buildLogsSummary": { "type": "string", "minLength": 2, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "buildId", "tenantId", "ownerUid", "clientName", "appName",
+        "androidPackageId", "iosBundleId", "appVersion", "versionCode",
+        "primaryColor", "secondaryColor", "logoText", "customDomain",
+        "apiBaseUrl", "signingMode", "signingVerdict", "buildEngine",
+        "status", "sha256Fingerprint", "apkFileName", "apkSizeBytes",
+        "buildLogsSummary", "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -596,6 +634,10 @@
     "/audit_logs/{logId}": {
       "schema": { "$ref": "#/entities/AuditLog" },
       "description": "23. Immutable platform and tenant security audit logs."
+    },
+    "/tenants/{tenantId}/apk_builds/{buildId}": {
+      "schema": { "$ref": "#/entities/ApkBuild" },
+      "description": "24. Client-wise White-Label Android APK and iOS IPA build history records."
     }
   }
 }

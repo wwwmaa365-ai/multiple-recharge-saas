@@ -10,6 +10,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def envPackageId = System.getenv("PACKAGE_ID") ?: "in.rechargeexpres.app"
+def envAppName = System.getenv("APP_NAME") ?: "Recharge Expres"
+def envVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInteger()
+def envVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+
 android {
     namespace "in.rechargeexpres.recharge_expres_mobile"
     compileSdk flutter.compileSdkVersion
@@ -25,14 +30,14 @@ android {
     }
 
     defaultConfig {
-        applicationId System.getenv("PACKAGE_ID") ?: "in.rechargeexpres.app"
+        applicationId envPackageId
         minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode envVersionCode
+        versionName envVersionName
         manifestPlaceholders += [
             applicationName: "android.app.Application",
-            appName: System.getenv("APP_NAME") ?: "Recharge Expres"
+            appName: envAppName
         ]
     }
 

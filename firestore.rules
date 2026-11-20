@@ -580,8 +580,51 @@ service cloud.firestore {
       data.createdAt is timestamp;
     }
 
+    // 24. ApkBuild
+    function isValidApkBuild(data, tenantId) {
+      return data.keys().hasAll([
+        'buildId', 'tenantId', 'ownerUid', 'clientName', 'appName',
+        'androidPackageId', 'iosBundleId', 'appVersion', 'versionCode',
+        'primaryColor', 'secondaryColor', 'logoText', 'customDomain',
+        'apiBaseUrl', 'signingMode', 'signingVerdict', 'buildEngine',
+        'status', 'sha256Fingerprint', 'apkFileName', 'apkSizeBytes',
+        'buildLogsSummary', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'buildId', 'tenantId', 'ownerUid', 'clientName', 'appName',
+        'androidPackageId', 'iosBundleId', 'appVersion', 'versionCode',
+        'primaryColor', 'secondaryColor', 'logoText', 'customDomain',
+        'apiBaseUrl', 'signingMode', 'signingVerdict', 'buildEngine',
+        'status', 'sha256Fingerprint', 'apkFileName', 'apkSizeBytes',
+        'buildLogsSummary', 'createdAt'
+      ]) &&
+      isValidId(data.buildId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 120 &&
+      data.appName is string && data.appName.size() >= 2 && data.appName.size() <= 80 &&
+      data.androidPackageId is string && data.androidPackageId.size() >= 5 && data.androidPackageId.size() <= 120 &&
+      data.iosBundleId is string && data.iosBundleId.size() >= 5 && data.iosBundleId.size() <= 120 &&
+      data.appVersion is string && data.appVersion.size() >= 3 && data.appVersion.size() <= 32 &&
+      data.versionCode is int && data.versionCode >= 1 && data.versionCode <= 1000000 &&
+      data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 &&
+      data.secondaryColor is string && data.secondaryColor.size() >= 4 && data.secondaryColor.size() <= 16 &&
+      data.logoText is string && data.logoText.size() >= 1 && data.logoText.size() <= 32 &&
+      data.customDomain is string && data.customDomain.size() >= 4 && data.customDomain.size() <= 120 &&
+      data.apiBaseUrl is string && data.apiBaseUrl.size() >= 8 && data.apiBaseUrl.size() <= 250 &&
+      data.signingMode in ['debug_testing_key', 'production_keystore'] &&
+      data.signingVerdict is string && data.signingVerdict.size() >= 2 && data.signingVerdict.size() <= 240 &&
+      data.buildEngine in ['instant_gradle_container', 'github_actions_cloud'] &&
+      data.status in ['queued', 'building', 'succeeded', 'failed'] &&
+      data.sha256Fingerprint is string && data.sha256Fingerprint.size() >= 8 && data.sha256Fingerprint.size() <= 128 &&
+      data.apkFileName is string && data.apkFileName.size() >= 4 && data.apkFileName.size() <= 180 &&
+      data.apkSizeBytes is int && data.apkSizeBytes >= 0 && data.apkSizeBytes <= 500000000 &&
+      data.buildLogsSummary is string && data.buildLogsSummary.size() >= 2 && data.buildLogsSummary.size() <= 2000 &&
+      data.createdAt is timestamp;
+    }
+
     // ---------------------------------------------------------------------------
-    // ADMINS REGISTRY & ALL 23 COLLECTION MATCH BLOCKS
+    // ADMINS REGISTRY & ALL 24 COLLECTION MATCH BLOCKS
     // ---------------------------------------------------------------------------
 
     match /admins/{adminUid} {
@@ -1029,6 +1072,32 @@ service cloud.firestore {
              incoming().diff(existing()).affectedKeys().hasOnly(['description', 'status', 'updatedAt']))
           );
         allow delete: if isValidId(tenantId) && isValidId(ticketId) && isMasterAdmin();
+      }
+
+      // 24. apk_builds (Client-Wise White-Label APK Build History)
+      match /apk_builds/{buildId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(buildId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(buildId) &&
+          isValidApkBuild(incoming(), tenantId) &&
+          incoming().buildId == buildId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(buildId) &&
+          isValidApkBuild(incoming(), tenantId) &&
+          incoming().buildId == existing().buildId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().createdAt == existing().createdAt &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(buildId) && isMasterAdmin();
       }
     }
 
