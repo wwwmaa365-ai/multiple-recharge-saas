@@ -79,23 +79,20 @@ jobs:
 
       - name: 3. Scaffold Missing iOS Platform Runner Files & Preserve White-Label Source
         run: |
-          if [ ! -d "ios/Runner.xcodeproj" ]; then
-            echo "Backing up white-label Dart source, tests, Info.plist, and ExportOptions.plist before scaffolding..."
-            mkdir -p /tmp/rx_ios_backup
-            cp -r lib /tmp/rx_ios_backup/lib
-            cp -r test /tmp/rx_ios_backup/test
-            cp pubspec.yaml /tmp/rx_ios_backup/pubspec.yaml
-            cp analysis_options.yaml /tmp/rx_ios_backup/analysis_options.yaml
-            cp ios/Runner/Info.plist /tmp/rx_ios_backup/Info.plist
-            cp ios/ExportOptions.plist /tmp/rx_ios_backup/ExportOptions.plist
-            flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android,ios .
-            cp -r /tmp/rx_ios_backup/lib/* lib/
-            cp -r /tmp/rx_ios_backup/test/* test/
-            cp /tmp/rx_ios_backup/pubspec.yaml pubspec.yaml
-            cp /tmp/rx_ios_backup/analysis_options.yaml analysis_options.yaml
-            cp /tmp/rx_ios_backup/Info.plist ios/Runner/Info.plist
-            cp /tmp/rx_ios_backup/ExportOptions.plist ios/ExportOptions.plist
-          fi
+          echo "Backing up white-label Dart source, tests, and ExportOptions.plist before scaffolding..."
+          mkdir -p /tmp/rx_ios_backup
+          cp -r lib /tmp/rx_ios_backup/lib
+          cp -r test /tmp/rx_ios_backup/test
+          cp pubspec.yaml /tmp/rx_ios_backup/pubspec.yaml
+          cp analysis_options.yaml /tmp/rx_ios_backup/analysis_options.yaml
+          cp ios/ExportOptions.plist /tmp/rx_ios_backup/ExportOptions.plist
+          rm -rf ios
+          flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=ios .
+          cp -r /tmp/rx_ios_backup/lib/* lib/
+          cp -r /tmp/rx_ios_backup/test/* test/
+          cp /tmp/rx_ios_backup/pubspec.yaml pubspec.yaml
+          cp /tmp/rx_ios_backup/analysis_options.yaml analysis_options.yaml
+          cp /tmp/rx_ios_backup/ExportOptions.plist ios/ExportOptions.plist
           plutil -replace CFBundleDisplayName -string "${{ env.APP_NAME }}" ios/Runner/Info.plist || true
           plutil -replace CFBundleIdentifier -string "${{ env.BUNDLE_ID }}" ios/Runner/Info.plist || true
 

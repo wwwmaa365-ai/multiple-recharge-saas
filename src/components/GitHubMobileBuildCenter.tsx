@@ -1103,14 +1103,14 @@ export const GitHubMobileBuildCenter: React.FC<GitHubMobileBuildCenterProps> = (
                 </tr>
                 <tr>
                   <td className="py-2.5 px-3 font-mono text-red-600 dark:text-red-400">
-                    flutter create overwrites white-label build.gradle &amp; AndroidManifest.xml
+                    Step 9: Gradle task assembleRelease failed with exit code 1
                   </td>
-                  <td className="py-2.5 px-3 font-mono">.github/workflows/android-build.yml</td>
+                  <td className="py-2.5 px-3 font-mono">.github/workflows/android-build.yml &amp; android/app/build.gradle</td>
                   <td className="py-2.5 px-3">
-                    Scaffolding missing Gradle wrapper files overwrote custom <code className="font-mono">${'{appName}'}</code> and <code className="font-mono">PACKAGE_ID</code> rules.
+                    Overwriting Flutter 3.29&apos;s generated Kotlin DSL (<code className="font-mono">build.gradle.kts</code>) with a custom Groovy <code className="font-mono">build.gradle</code> and custom <code className="font-mono">AndroidManifest.xml</code> (missing <code className="font-mono">${'{applicationName}'}</code> placeholder and matching <code className="font-mono">MainActivity</code> namespace) caused <code className="font-mono">assembleRelease</code> to fail after 117s.
                   </td>
                   <td className="py-2.5 px-3">
-                    Step 4 now backs up <code className="font-mono">build.gradle</code> and <code className="font-mono">AndroidManifest.xml</code> before running <code className="font-mono">flutter create</code>, removes conflicting <code className="font-mono">build.gradle.kts</code>, and restores the white-label files.
+                    Step 4 now runs <code className="font-mono">rm -rf android</code> before <code className="font-mono">flutter create --platforms=android .</code> so the runner generates a 100% SDK-matched <code className="font-mono">android/</code> project, then surgically patches <code className="font-mono">applicationId</code> and <code className="font-mono">android:label</code> via <code className="font-mono">sed</code>.
                   </td>
                 </tr>
                 <tr>
