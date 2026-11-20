@@ -177,9 +177,11 @@ class TenantBuildConfig {
     targetSdkVersion flutter.targetSdkVersion
     versionCode 1
     versionName "1.0.0"
-    manifestPlaceholders = [
-        appName: System.getenv("APP_NAME") ?: "Recharge Expres"
-    ]
+        manifestPlaceholders += [
+            applicationName: "android.app.Application",
+            appName: System.getenv("APP_NAME") ?: "Recharge Expres"
+        ]
+    }
 }`,
   },
   {

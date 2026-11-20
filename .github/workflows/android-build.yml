@@ -94,14 +94,86 @@ jobs:
             cp analysis_options.yaml /tmp/rx_android_backup/analysis_options.yaml
             cp android/app/build.gradle /tmp/rx_android_backup/build.gradle
             cp android/app/src/main/AndroidManifest.xml /tmp/rx_android_backup/AndroidManifest.xml
+            rm -rf android
             flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android,ios .
-            rm -f android/app/build.gradle.kts
             cp -r /tmp/rx_android_backup/lib/* lib/
             cp -r /tmp/rx_android_backup/test/* test/
             cp /tmp/rx_android_backup/pubspec.yaml pubspec.yaml
             cp /tmp/rx_android_backup/analysis_options.yaml analysis_options.yaml
-            cp /tmp/rx_android_backup/build.gradle android/app/build.gradle
             cp /tmp/rx_android_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            if [ -f "android/app/build.gradle.kts" ]; then
+              cat << 'KTS_EOF' > android/app/build.gradle.kts
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          plugins {
+              id("com.android.application")
+              id("kotlin-android")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              namespace = "in.rechargeexpres.recharge_expres_mobile"
+              compileSdk = flutter.compileSdkVersion
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = JavaVersion.VERSION_17.toString()
+              }
+
+              defaultConfig {
+                  applicationId = System.getenv("PACKAGE_ID") ?: "in.rechargeexpres.app"
+                  minSdk = 23
+                  targetSdk = flutter.targetSdkVersion
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+                  manifestPlaceholders["applicationName"] = "android.app.Application"
+                  manifestPlaceholders["appName"] = System.getenv("APP_NAME") ?: "Recharge Expres"
+              }
+
+              signingConfigs {
+                  if (keystorePropertiesFile.exists()) {
+                      create("release") {
+                          keyAlias = keystoreProperties.getProperty("keyAlias")
+                          keyPassword = keystoreProperties.getProperty("keyPassword")
+                          storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+                          storePassword = keystoreProperties.getProperty("storePassword")
+                      }
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = if (keystorePropertiesFile.exists()) {
+                          signingConfigs.getByName("release")
+                      } else {
+                          signingConfigs.getByName("debug")
+                      }
+                      isMinifyEnabled = false
+                      isShrinkResources = false
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          KTS_EOF
+              sed -i 's/^          //' android/app/build.gradle.kts
+            else
+              cp /tmp/rx_android_backup/build.gradle android/app/build.gradle
+            fi
             chmod +x android/gradlew
           fi
 

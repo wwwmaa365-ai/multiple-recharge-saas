@@ -53,7 +53,7 @@ class MobileRootShell extends StatefulWidget {
 class _MobileRootShellState extends State<MobileRootShell> {
   bool _isAuthenticated = true;
   String _customerPhone = '9830012345';
-  String _customerName = 'Sanjit Customer';
+  final String _customerName = 'Sanjit Customer';
   int _selectedTabIndex = 0;
 
   double _walletBalanceInr = 2450.00;
