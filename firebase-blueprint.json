@@ -1,0 +1,601 @@
+{
+  "entities": {
+    "Tenant": {
+      "title": "Tenant",
+      "description": "1. Registered white-label SaaS client business subscribed to Recharge Expres.",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "phone": { "type": "string", "minLength": 10, "maxLength": 20 },
+        "customDomain": { "type": "string", "minLength": 3, "maxLength": 180 },
+        "status": { "type": "string", "enum": ["pending", "active", "suspended", "expired"] },
+        "subscriptionPlanId": { "type": "string", "enum": ["monthly", "quarterly", "yearly", "custom"] },
+        "subscriptionStatus": { "type": "string", "enum": ["trial", "active", "past_due", "expired", "suspended"] },
+        "subscriptionExpiresAt": { "type": "string", "minLength": 10, "maxLength": 40 },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "secondaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "logoText": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "apiProviderStatus": { "type": "string", "enum": ["not_configured", "connected", "error"] },
+        "businessAddress": { "type": "string", "minLength": 2, "maxLength": 250, "description": "Registered physical business address of the client." },
+        "country": { "type": "string", "minLength": 2, "maxLength": 80, "description": "Country of operation." },
+        "state": { "type": "string", "minLength": 2, "maxLength": 80, "description": "State or province." },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80, "description": "City or district." },
+        "passwordHash": { "type": "string", "minLength": 6, "maxLength": 256, "description": "SHA-256 salted credential hash for Client Admin login." },
+        "notes": { "type": "string", "minLength": 0, "maxLength": 1000, "description": "Internal Master Admin notes for the client account." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "tenantId", "ownerUid", "businessName", "ownerName", "email", "phone",
+        "customDomain", "status", "subscriptionPlanId", "subscriptionStatus",
+        "subscriptionExpiresAt", "primaryColor", "secondaryColor", "logoText",
+        "apiProviderStatus", "createdAt", "updatedAt"
+      ]
+    },
+    "TenantDomain": {
+      "title": "TenantDomain",
+      "description": "2. Custom domain mapping and DNS/SSL verification state for a tenant.",
+      "type": "object",
+      "properties": {
+        "domainId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "domain": { "type": "string", "minLength": 3, "maxLength": 180 },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "verificationTxtRecord": { "type": "string", "minLength": 10, "maxLength": 180 },
+        "dnsVerified": { "type": "boolean" },
+        "sslStatus": { "type": "string", "enum": ["pending", "provisioning", "active", "failed"] },
+        "status": { "type": "string", "enum": ["pending_verification", "active", "disabled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "domainId", "domain", "tenantId", "ownerUid", "verificationTxtRecord",
+        "dnsVerified", "sslStatus", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "TenantSetting": {
+      "title": "TenantSetting",
+      "description": "3. White-label branding, Android/iOS bundle identifiers, and website configuration for a tenant.",
+      "type": "object",
+      "properties": {
+        "settingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "logoText": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "secondaryColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "androidPackageName": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "iosBundleId": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "appVersion": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "supportEmail": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "supportPhone": { "type": "string", "minLength": 10, "maxLength": 20 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "settingId", "tenantId", "ownerUid", "logoText", "primaryColor",
+        "secondaryColor", "androidPackageName", "iosBundleId", "appVersion",
+        "supportEmail", "supportPhone", "updatedAt"
+      ]
+    },
+    "TenantSubscription": {
+      "title": "TenantSubscription",
+      "description": "4. Active or expired SaaS subscription assignment for a tenant.",
+      "type": "object",
+      "properties": {
+        "subscriptionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "planId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["trial", "active", "past_due", "expired", "suspended"] },
+        "periodStart": { "type": "string", "minLength": 10, "maxLength": 40 },
+        "periodEnd": { "type": "string", "minLength": 10, "maxLength": 40 },
+        "autoRenew": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "subscriptionId", "tenantId", "ownerUid", "planId", "status",
+        "periodStart", "periodEnd", "autoRenew", "updatedAt"
+      ]
+    },
+    "SubscriptionPlan": {
+      "title": "SubscriptionPlan",
+      "description": "5. SaaS subscription tier configured by Master Admin SANJIT BADYAKAR.",
+      "type": "object",
+      "properties": {
+        "planId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "billingCycle": { "type": "string", "enum": ["monthly", "quarterly", "yearly", "custom"] },
+        "priceInr": { "type": "number" },
+        "durationDays": { "type": "number" },
+        "trialDays": { "type": "number" },
+        "discountPercent": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "description": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "planId", "name", "billingCycle", "priceInr", "durationDays",
+        "trialDays", "discountPercent", "isActive", "description", "updatedAt"
+      ]
+    },
+    "SubscriptionPayment": {
+      "title": "SubscriptionPayment",
+      "description": "6. SaaS subscription fee payment belonging strictly to Recharge Expres platform revenue.",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "planId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "amountInr": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "verified", "failed", "refunded"] },
+        "gatewayReference": { "type": "string", "minLength": 2, "maxLength": 128 },
+        "invoiceNumber": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "paymentId", "tenantId", "ownerUid", "planId", "amountInr",
+        "status", "gatewayReference", "invoiceNumber", "createdAt"
+      ]
+    },
+    "User": {
+      "title": "User",
+      "description": "7. Authenticated platform or tenant user account.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "phone": { "type": "string", "minLength": 10, "maxLength": 20 },
+        "passwordHash": { "type": "string", "minLength": 6, "maxLength": 256 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "roleName": { "type": "string", "enum": ["master_admin", "client_admin", "retailer", "customer", "staff"] },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "tenantId", "ownerUid", "email", "displayName",
+        "roleName", "status", "createdAt"
+      ]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "8. End customer registered under a specific client tenant.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "mobileNumber": { "type": "string", "minLength": 10, "maxLength": 15 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "kycStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "status": { "type": "string", "enum": ["active", "blocked"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "customerId", "tenantId", "ownerUid", "fullName", "mobileNumber",
+        "email", "kycStatus", "status", "createdAt"
+      ]
+    },
+    "Retailer": {
+      "title": "Retailer",
+      "description": "9. B2B recharge retailer agent belonging to a specific client tenant.",
+      "type": "object",
+      "properties": {
+        "retailerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "shopName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "agentName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "mobileNumber": { "type": "string", "minLength": 10, "maxLength": 15 },
+        "commissionTier": { "type": "string", "enum": ["standard", "silver", "gold", "platinum"] },
+        "approvalStatus": { "type": "string", "enum": ["pending", "approved", "rejected", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "retailerId", "tenantId", "ownerUid", "shopName", "agentName",
+        "mobileNumber", "commissionTier", "approvalStatus", "createdAt"
+      ]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "10. Support or operations staff member assigned to a tenant or platform.",
+      "type": "object",
+      "properties": {
+        "staffId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "department": { "type": "string", "enum": ["support", "finance", "technical", "compliance"] },
+        "roleId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "staffId", "tenantId", "ownerUid", "fullName", "email",
+        "department", "roleId", "status", "createdAt"
+      ]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "11. Role-based access control (RBAC) role definition.",
+      "type": "object",
+      "properties": {
+        "roleId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "roleName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "scopeLevel": { "type": "string", "enum": ["platform", "tenant", "retailer", "customer"] },
+        "description": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "roleId", "tenantId", "ownerUid", "roleName", "scopeLevel", "description", "createdAt"
+      ]
+    },
+    "Permission": {
+      "title": "Permission",
+      "description": "12. Granular permission rule assigned to a role within a tenant.",
+      "type": "object",
+      "properties": {
+        "permissionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "roleId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "resourceModule": { "type": "string", "enum": ["recharges", "wallets", "api_credentials", "domains", "reports", "tickets", "staff"] },
+        "canRead": { "type": "boolean" },
+        "canWrite": { "type": "boolean" },
+        "canApprove": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "permissionId", "tenantId", "ownerUid", "roleId", "resourceModule",
+        "canRead", "canWrite", "canApprove", "updatedAt"
+      ]
+    },
+    "RechargeApiCredential": {
+      "title": "RechargeApiCredential",
+      "description": "13. Tenant-isolated encrypted recharge API credentials and adapter config.",
+      "type": "object",
+      "properties": {
+        "credentialId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "providerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "adapterType": { "type": "string", "enum": ["standard_rest", "cyrus_compatible", "ezulix_compatible", "custom_json"] },
+        "apiBaseUrl": { "type": "string", "minLength": 8, "maxLength": 250 },
+        "apiUsername": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "encryptedApiToken": { "type": "string", "minLength": 4, "maxLength": 512 },
+        "encryptedApiKey": { "type": "string", "minLength": 4, "maxLength": 512 },
+        "encryptedApiSecret": { "type": "string", "minLength": 4, "maxLength": 512 },
+        "callbackUrl": { "type": "string", "minLength": 8, "maxLength": 250 },
+        "webhookSecretHash": { "type": "string", "minLength": 4, "maxLength": 256 },
+        "status": { "type": "string", "enum": ["pending_test", "active", "disabled", "failed"] },
+        "mode": { "type": "string", "enum": ["test", "live"] },
+        "lastVerifiedBalanceInr": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "credentialId", "tenantId", "ownerUid", "providerName", "adapterType",
+        "apiBaseUrl", "apiUsername", "encryptedApiToken", "encryptedApiKey",
+        "encryptedApiSecret", "callbackUrl", "webhookSecretHash", "status",
+        "mode", "lastVerifiedBalanceInr", "updatedAt"
+      ]
+    },
+    "PaymentGatewayCredential": {
+      "title": "PaymentGatewayCredential",
+      "description": "14. Tenant-isolated payment gateway credentials for customer/retailer wallet top-ups.",
+      "type": "object",
+      "properties": {
+        "gatewayId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "gatewayProvider": { "type": "string", "enum": ["razorpay", "cashfree", "paytm", "phonepe", "custom_upi"] },
+        "merchantId": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "encryptedKeyId": { "type": "string", "minLength": 4, "maxLength": 512 },
+        "encryptedKeySecret": { "type": "string", "minLength": 4, "maxLength": 512 },
+        "webhookSecretHash": { "type": "string", "minLength": 4, "maxLength": 256 },
+        "mode": { "type": "string", "enum": ["test", "live"] },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "gatewayId", "tenantId", "ownerUid", "gatewayProvider", "merchantId",
+        "encryptedKeyId", "encryptedKeySecret", "webhookSecretHash",
+        "mode", "status", "updatedAt"
+      ]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "15. Tenant-isolated customer, retailer, or settlement wallet balance.",
+      "type": "object",
+      "properties": {
+        "walletId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "accountType": { "type": "string", "enum": ["customer_wallet", "retailer_wallet", "client_settlement"] },
+        "balanceInr": { "type": "number" },
+        "currency": { "type": "string", "enum": ["INR"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "walletId", "tenantId", "ownerUid", "accountType", "balanceInr", "currency", "updatedAt"
+      ]
+    },
+    "WalletLedger": {
+      "title": "WalletLedger",
+      "description": "16. Immutable double-entry credit/debit ledger record for a tenant wallet.",
+      "type": "object",
+      "properties": {
+        "ledgerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "walletId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "txReferenceId": { "type": "string", "minLength": 2, "maxLength": 128 },
+        "entryType": { "type": "string", "enum": ["topup_credit", "recharge_debit", "refund_credit", "commission_credit"] },
+        "amountInr": { "type": "number" },
+        "openingBalanceInr": { "type": "number" },
+        "closingBalanceInr": { "type": "number" },
+        "remarks": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ledgerId", "tenantId", "ownerUid", "walletId", "txReferenceId",
+        "entryType", "amountInr", "openingBalanceInr", "closingBalanceInr",
+        "remarks", "createdAt"
+      ]
+    },
+    "RechargeTransaction": {
+      "title": "RechargeTransaction",
+      "description": "17. Mobile or DTH recharge transaction state machine record scoped to a tenant.",
+      "type": "object",
+      "properties": {
+        "txId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorRole": { "type": "string", "enum": ["customer", "retailer"] },
+        "serviceType": { "type": "string", "enum": ["mobile_prepaid", "mobile_postpaid", "dth"] },
+        "operatorCode": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "circleCode": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "targetNumber": { "type": "string", "minLength": 5, "maxLength": 40 },
+        "amountInr": { "type": "number" },
+        "status": { "type": "string", "enum": ["Initiated", "Processing", "Pending", "Successful", "Failed", "Refunded"] },
+        "apiProvider": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "redactedApiResponse": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "idempotencyKey": { "type": "string", "minLength": 6, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "minLength": 1, "maxLength": 40 }
+      },
+      "required": [
+        "txId", "tenantId", "userUid", "actorRole", "serviceType",
+        "operatorCode", "circleCode", "targetNumber", "amountInr",
+        "status", "apiProvider", "redactedApiResponse", "idempotencyKey",
+        "createdAt", "completedAt"
+      ]
+    },
+    "BillPayment": {
+      "title": "BillPayment",
+      "description": "18. BBPS utility bill payment record (Electricity, Gas, Water, Broadband, Landline, Insurance).",
+      "type": "object",
+      "properties": {
+        "billTxId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bbpsCategory": { "type": "string", "enum": ["electricity", "gas", "water", "broadband", "landline", "insurance"] },
+        "billerId": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "consumerNumber": { "type": "string", "minLength": 4, "maxLength": 60 },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "amountInr": { "type": "number" },
+        "bbpsReferenceNo": { "type": "string", "minLength": 4, "maxLength": 100 },
+        "status": { "type": "string", "enum": ["Initiated", "Processing", "Pending", "Successful", "Failed", "Refunded"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "billTxId", "tenantId", "userUid", "bbpsCategory", "billerId",
+        "consumerNumber", "customerName", "amountInr", "bbpsReferenceNo",
+        "status", "createdAt"
+      ]
+    },
+    "Commission": {
+      "title": "Commission",
+      "description": "19. Operator-wise commission and surcharge configuration for a tenant's retailers.",
+      "type": "object",
+      "properties": {
+        "commissionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "operatorCode": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "serviceType": { "type": "string", "enum": ["mobile_prepaid", "mobile_postpaid", "dth", "bbps"] },
+        "retailerCommissionPercent": { "type": "number" },
+        "flatSurchargeInr": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "commissionId", "tenantId", "ownerUid", "operatorCode", "serviceType",
+        "retailerCommissionPercent", "flatSurchargeInr", "updatedAt"
+      ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "20. Multi-channel notification log (SMS, Email, WhatsApp, Firebase Push) scoped to a tenant.",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "channel": { "type": "string", "enum": ["sms", "email", "whatsapp", "fcm_push"] },
+        "eventType": { "type": "string", "enum": ["registration", "login_otp", "subscription_payment", "subscription_expiry", "recharge_success", "recharge_pending", "recharge_failure", "refund", "wallet_addition", "new_offer"] },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "messageBody": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "deliveryStatus": { "type": "string", "enum": ["queued", "sent", "delivered", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "notificationId", "tenantId", "recipientUid", "channel", "eventType",
+        "subject", "messageBody", "deliveryStatus", "createdAt"
+      ]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "21. Customer or retailer dispute and support ticket scoped to a tenant.",
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "creatorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "relatedTxId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "subject": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ticketId", "tenantId", "creatorUid", "relatedTxId", "subject",
+        "description", "priority", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "22. SaaS subscription GST tax invoice issued by Recharge Expres to a client tenant.",
+      "type": "object",
+      "properties": {
+        "invoiceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "paymentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "invoiceNumber": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "subtotalInr": { "type": "number" },
+        "gstInr": { "type": "number" },
+        "totalInr": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "unpaid", "void"] },
+        "issuedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "invoiceId", "tenantId", "ownerUid", "paymentId", "invoiceNumber",
+        "subtotalInr", "gstInr", "totalInr", "status", "issuedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "23. Immutable platform and tenant security audit trail.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorEmail": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "action": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "targetResource": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "details": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "logId", "tenantId", "actorUid", "actorEmail", "action",
+        "targetResource", "details", "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/tenants/{tenantId}": {
+      "schema": { "$ref": "#/entities/Tenant" },
+      "description": "1. Registered white-label SaaS client tenants."
+    },
+    "/tenant_domains/{domainId}": {
+      "schema": { "$ref": "#/entities/TenantDomain" },
+      "description": "2. Custom domain routing and DNS/SSL verification records."
+    },
+    "/tenants/{tenantId}/tenant_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/TenantSetting" },
+      "description": "3. Tenant branding, app package IDs, and support settings."
+    },
+    "/tenants/{tenantId}/tenant_subscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/TenantSubscription" },
+      "description": "4. Tenant subscription lifecycle records."
+    },
+    "/subscription_plans/{planId}": {
+      "schema": { "$ref": "#/entities/SubscriptionPlan" },
+      "description": "5. Master Admin SaaS subscription plans (Monthly, Quarterly, Yearly)."
+    },
+    "/subscription_payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/SubscriptionPayment" },
+      "description": "6. SaaS subscription fee collections belonging to Recharge Expres."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "7. Authenticated platform and tenant users."
+    },
+    "/tenants/{tenantId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "8. End customers isolated under a tenant."
+    },
+    "/tenants/{tenantId}/retailers/{retailerId}": {
+      "schema": { "$ref": "#/entities/Retailer" },
+      "description": "9. B2B recharge retailers isolated under a tenant."
+    },
+    "/tenants/{tenantId}/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/Staff" },
+      "description": "10. Support and operations staff isolated under a tenant."
+    },
+    "/tenants/{tenantId}/roles/{roleId}": {
+      "schema": { "$ref": "#/entities/Role" },
+      "description": "11. RBAC roles defined under a tenant."
+    },
+    "/tenants/{tenantId}/permissions/{permissionId}": {
+      "schema": { "$ref": "#/entities/Permission" },
+      "description": "12. Granular RBAC permissions defined under a tenant."
+    },
+    "/tenants/{tenantId}/recharge_api_credentials/{credentialId}": {
+      "schema": { "$ref": "#/entities/RechargeApiCredential" },
+      "description": "13. Encrypted recharge API credentials owned by a tenant."
+    },
+    "/tenants/{tenantId}/payment_gateway_credentials/{gatewayId}": {
+      "schema": { "$ref": "#/entities/PaymentGatewayCredential" },
+      "description": "14. Encrypted payment gateway credentials owned by a tenant."
+    },
+    "/tenants/{tenantId}/wallets/{walletId}": {
+      "schema": { "$ref": "#/entities/Wallet" },
+      "description": "15. Customer, retailer, and settlement wallets isolated under a tenant."
+    },
+    "/tenants/{tenantId}/wallet_ledger/{ledgerId}": {
+      "schema": { "$ref": "#/entities/WalletLedger" },
+      "description": "16. Append-only financial ledger entries isolated under a tenant."
+    },
+    "/tenants/{tenantId}/recharge_transactions/{txId}": {
+      "schema": { "$ref": "#/entities/RechargeTransaction" },
+      "description": "17. Mobile and DTH recharge transactions isolated under a tenant."
+    },
+    "/tenants/{tenantId}/bill_payments/{billTxId}": {
+      "schema": { "$ref": "#/entities/BillPayment" },
+      "description": "18. BBPS utility bill payment transactions isolated under a tenant."
+    },
+    "/tenants/{tenantId}/commissions/{commissionId}": {
+      "schema": { "$ref": "#/entities/Commission" },
+      "description": "19. Operator commission slabs isolated under a tenant."
+    },
+    "/tenants/{tenantId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "20. Multi-channel notification dispatches isolated under a tenant."
+    },
+    "/tenants/{tenantId}/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "21. Customer and retailer support tickets isolated under a tenant."
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "22. SaaS subscription GST invoices issued by Recharge Expres."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "23. Immutable platform and tenant security audit logs."
+    }
+  }
+}

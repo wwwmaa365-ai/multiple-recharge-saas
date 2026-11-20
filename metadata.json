@@ -1,0 +1,6 @@
+{
+  "name": "Recharge Expres",
+  "description": "Multi-Tenant White-Label Mobile Recharge & Bill Payment SaaS Platform owned by SANJIT BADYAKAR (rechargeexpres.in).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,1157 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'www.maa365@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isTenantOwner(tenantId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/tenants/$(tenantId)) &&
+        get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------------------
+    // 23 ENTITY VALIDATION BLUEPRINTS (Anti-Update-Gap & Strict Schema Guards)
+    // ---------------------------------------------------------------------------
+
+    // 1. Tenant
+    function isValidTenant(data) {
+      return data.keys().hasAll([
+        'tenantId', 'ownerUid', 'businessName', 'ownerName', 'email', 'phone',
+        'customDomain', 'status', 'subscriptionPlanId', 'subscriptionStatus',
+        'subscriptionExpiresAt', 'primaryColor', 'secondaryColor', 'logoText',
+        'apiProviderStatus', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'tenantId', 'ownerUid', 'businessName', 'ownerName', 'email', 'phone',
+        'customDomain', 'status', 'subscriptionPlanId', 'subscriptionStatus',
+        'subscriptionExpiresAt', 'primaryColor', 'secondaryColor', 'logoText',
+        'apiProviderStatus', 'businessAddress', 'country', 'state', 'city',
+        'passwordHash', 'notes', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.tenantId) &&
+      isValidId(data.ownerUid) &&
+      data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 120 &&
+      data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 120 &&
+      data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+      data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 20 &&
+      data.customDomain is string && data.customDomain.size() >= 3 && data.customDomain.size() <= 180 &&
+      data.status in ['pending', 'active', 'suspended', 'expired'] &&
+      data.subscriptionPlanId in ['monthly', 'quarterly', 'yearly', 'custom'] &&
+      data.subscriptionStatus in ['trial', 'active', 'past_due', 'expired', 'suspended'] &&
+      data.subscriptionExpiresAt is string && data.subscriptionExpiresAt.size() >= 10 && data.subscriptionExpiresAt.size() <= 40 &&
+      data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 &&
+      data.secondaryColor is string && data.secondaryColor.size() >= 4 && data.secondaryColor.size() <= 16 &&
+      data.logoText is string && data.logoText.size() >= 1 && data.logoText.size() <= 40 &&
+      data.apiProviderStatus in ['not_configured', 'connected', 'error'] &&
+      (!('businessAddress' in data) || (data.businessAddress is string && data.businessAddress.size() <= 250)) &&
+      (!('country' in data) || (data.country is string && data.country.size() <= 80)) &&
+      (!('state' in data) || (data.state is string && data.state.size() <= 80)) &&
+      (!('city' in data) || (data.city is string && data.city.size() <= 80)) &&
+      (!('passwordHash' in data) || (data.passwordHash is string && data.passwordHash.size() <= 256)) &&
+      (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // 2. TenantDomain
+    function isValidTenantDomain(data) {
+      return data.keys().hasAll([
+        'domainId', 'domain', 'tenantId', 'ownerUid', 'verificationTxtRecord',
+        'dnsVerified', 'sslStatus', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'domainId', 'domain', 'tenantId', 'ownerUid', 'verificationTxtRecord',
+        'dnsVerified', 'sslStatus', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.domainId) &&
+      data.domain is string && data.domain.size() >= 3 && data.domain.size() <= 180 &&
+      isValidId(data.tenantId) &&
+      isValidId(data.ownerUid) &&
+      data.verificationTxtRecord is string && data.verificationTxtRecord.size() >= 10 && data.verificationTxtRecord.size() <= 180 &&
+      data.dnsVerified is bool &&
+      data.sslStatus in ['pending', 'provisioning', 'active', 'failed'] &&
+      data.status in ['pending_verification', 'active', 'disabled'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // 3. TenantSetting
+    function isValidTenantSetting(data, tenantId) {
+      return data.keys().hasAll([
+        'settingId', 'tenantId', 'ownerUid', 'logoText', 'primaryColor',
+        'secondaryColor', 'androidPackageName', 'iosBundleId', 'appVersion',
+        'supportEmail', 'supportPhone', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'settingId', 'tenantId', 'ownerUid', 'logoText', 'primaryColor',
+        'secondaryColor', 'androidPackageName', 'iosBundleId', 'appVersion',
+        'supportEmail', 'supportPhone', 'updatedAt'
+      ]) &&
+      isValidId(data.settingId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.logoText is string && data.logoText.size() >= 1 && data.logoText.size() <= 40 &&
+      data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 &&
+      data.secondaryColor is string && data.secondaryColor.size() >= 4 && data.secondaryColor.size() <= 16 &&
+      data.androidPackageName is string && data.androidPackageName.size() >= 5 && data.androidPackageName.size() <= 120 &&
+      data.iosBundleId is string && data.iosBundleId.size() >= 5 && data.iosBundleId.size() <= 120 &&
+      data.appVersion is string && data.appVersion.size() >= 3 && data.appVersion.size() <= 24 &&
+      data.supportEmail is string && data.supportEmail.size() >= 5 && data.supportEmail.size() <= 160 &&
+      data.supportPhone is string && data.supportPhone.size() >= 10 && data.supportPhone.size() <= 20 &&
+      data.updatedAt is timestamp;
+    }
+
+    // 4. TenantSubscription
+    function isValidTenantSubscription(data, tenantId) {
+      return data.keys().hasAll([
+        'subscriptionId', 'tenantId', 'ownerUid', 'planId', 'status',
+        'periodStart', 'periodEnd', 'autoRenew', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'subscriptionId', 'tenantId', 'ownerUid', 'planId', 'status',
+        'periodStart', 'periodEnd', 'autoRenew', 'updatedAt'
+      ]) &&
+      isValidId(data.subscriptionId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      isValidId(data.planId) &&
+      data.status in ['trial', 'active', 'past_due', 'expired', 'suspended'] &&
+      data.periodStart is string && data.periodStart.size() >= 10 && data.periodStart.size() <= 40 &&
+      data.periodEnd is string && data.periodEnd.size() >= 10 && data.periodEnd.size() <= 40 &&
+      data.autoRenew is bool &&
+      data.updatedAt is timestamp;
+    }
+
+    // 5. SubscriptionPlan
+    function isValidSubscriptionPlan(data) {
+      return data.keys().hasAll([
+        'planId', 'name', 'billingCycle', 'priceInr', 'durationDays',
+        'trialDays', 'discountPercent', 'isActive', 'description', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'planId', 'name', 'billingCycle', 'priceInr', 'durationDays',
+        'trialDays', 'discountPercent', 'isActive', 'description', 'updatedAt'
+      ]) &&
+      isValidId(data.planId) &&
+      data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+      data.billingCycle in ['monthly', 'quarterly', 'yearly', 'custom'] &&
+      data.priceInr is number && data.priceInr >= 0 && data.priceInr <= 1000000 &&
+      data.durationDays is number && data.durationDays >= 1 && data.durationDays <= 3650 &&
+      data.trialDays is number && data.trialDays >= 0 && data.trialDays <= 90 &&
+      data.discountPercent is number && data.discountPercent >= 0 && data.discountPercent <= 100 &&
+      data.isActive is bool &&
+      data.description is string && data.description.size() >= 2 && data.description.size() <= 300 &&
+      data.updatedAt is timestamp;
+    }
+
+    // 6. SubscriptionPayment
+    function isValidSubscriptionPayment(data) {
+      return data.keys().hasAll([
+        'paymentId', 'tenantId', 'ownerUid', 'planId', 'amountInr',
+        'status', 'gatewayReference', 'invoiceNumber', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'paymentId', 'tenantId', 'ownerUid', 'planId', 'amountInr',
+        'status', 'gatewayReference', 'invoiceNumber', 'createdAt'
+      ]) &&
+      isValidId(data.paymentId) &&
+      isValidId(data.tenantId) &&
+      isValidId(data.ownerUid) &&
+      isValidId(data.planId) &&
+      data.amountInr is number && data.amountInr >= 0 && data.amountInr <= 1000000 &&
+      data.status in ['pending', 'verified', 'failed', 'refunded'] &&
+      data.gatewayReference is string && data.gatewayReference.size() >= 2 && data.gatewayReference.size() <= 128 &&
+      data.invoiceNumber is string && data.invoiceNumber.size() >= 3 && data.invoiceNumber.size() <= 64 &&
+      data.createdAt is timestamp;
+    }
+
+    // 7. User
+    function isValidUser(data) {
+      return data.keys().hasAll([
+        'userId', 'tenantId', 'ownerUid', 'email', 'displayName',
+        'roleName', 'status', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'tenantId', 'ownerUid', 'email', 'phone', 'passwordHash',
+        'displayName', 'roleName', 'status', 'createdAt'
+      ]) &&
+      isValidId(data.userId) &&
+      isValidId(data.tenantId) &&
+      isValidId(data.ownerUid) &&
+      data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+      (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+      (!('passwordHash' in data) || (data.passwordHash is string && data.passwordHash.size() <= 256)) &&
+      data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 120 &&
+      data.roleName in ['master_admin', 'client_admin', 'retailer', 'customer', 'staff'] &&
+      data.status in ['active', 'suspended'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 8. Customer
+    function isValidCustomer(data, tenantId) {
+      return data.keys().hasAll([
+        'customerId', 'tenantId', 'ownerUid', 'fullName', 'mobileNumber',
+        'email', 'kycStatus', 'status', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'customerId', 'tenantId', 'ownerUid', 'fullName', 'mobileNumber',
+        'email', 'kycStatus', 'status', 'createdAt'
+      ]) &&
+      isValidId(data.customerId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+      data.mobileNumber is string && data.mobileNumber.size() >= 10 && data.mobileNumber.size() <= 15 &&
+      data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+      data.kycStatus in ['pending', 'verified', 'rejected'] &&
+      data.status in ['active', 'blocked'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 9. Retailer
+    function isValidRetailer(data, tenantId) {
+      return data.keys().hasAll([
+        'retailerId', 'tenantId', 'ownerUid', 'shopName', 'agentName',
+        'mobileNumber', 'commissionTier', 'approvalStatus', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'retailerId', 'tenantId', 'ownerUid', 'shopName', 'agentName',
+        'mobileNumber', 'commissionTier', 'approvalStatus', 'createdAt'
+      ]) &&
+      isValidId(data.retailerId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.shopName is string && data.shopName.size() >= 2 && data.shopName.size() <= 120 &&
+      data.agentName is string && data.agentName.size() >= 2 && data.agentName.size() <= 120 &&
+      data.mobileNumber is string && data.mobileNumber.size() >= 10 && data.mobileNumber.size() <= 15 &&
+      data.commissionTier in ['standard', 'silver', 'gold', 'platinum'] &&
+      data.approvalStatus in ['pending', 'approved', 'rejected', 'suspended'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 10. Staff
+    function isValidStaff(data, tenantId) {
+      return data.keys().hasAll([
+        'staffId', 'tenantId', 'ownerUid', 'fullName', 'email',
+        'department', 'roleId', 'status', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'staffId', 'tenantId', 'ownerUid', 'fullName', 'email',
+        'department', 'roleId', 'status', 'createdAt'
+      ]) &&
+      isValidId(data.staffId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+      data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+      data.department in ['support', 'finance', 'technical', 'compliance'] &&
+      isValidId(data.roleId) &&
+      data.status in ['active', 'suspended'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 11. Role
+    function isValidRole(data, tenantId) {
+      return data.keys().hasAll([
+        'roleId', 'tenantId', 'ownerUid', 'roleName', 'scopeLevel', 'description', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'roleId', 'tenantId', 'ownerUid', 'roleName', 'scopeLevel', 'description', 'createdAt'
+      ]) &&
+      isValidId(data.roleId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.roleName is string && data.roleName.size() >= 2 && data.roleName.size() <= 80 &&
+      data.scopeLevel in ['platform', 'tenant', 'retailer', 'customer'] &&
+      data.description is string && data.description.size() >= 2 && data.description.size() <= 240 &&
+      data.createdAt is timestamp;
+    }
+
+    // 12. Permission
+    function isValidPermission(data, tenantId) {
+      return data.keys().hasAll([
+        'permissionId', 'tenantId', 'ownerUid', 'roleId', 'resourceModule',
+        'canRead', 'canWrite', 'canApprove', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'permissionId', 'tenantId', 'ownerUid', 'roleId', 'resourceModule',
+        'canRead', 'canWrite', 'canApprove', 'updatedAt'
+      ]) &&
+      isValidId(data.permissionId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      isValidId(data.roleId) &&
+      data.resourceModule in ['recharges', 'wallets', 'api_credentials', 'domains', 'reports', 'tickets', 'staff'] &&
+      data.canRead is bool &&
+      data.canWrite is bool &&
+      data.canApprove is bool &&
+      data.updatedAt is timestamp;
+    }
+
+    // 13. RechargeApiCredential
+    function isValidRechargeApiCredential(data, tenantId) {
+      return data.keys().hasAll([
+        'credentialId', 'tenantId', 'ownerUid', 'providerName', 'adapterType',
+        'apiBaseUrl', 'apiUsername', 'encryptedApiToken', 'encryptedApiKey',
+        'encryptedApiSecret', 'callbackUrl', 'webhookSecretHash', 'status',
+        'mode', 'lastVerifiedBalanceInr', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'credentialId', 'tenantId', 'ownerUid', 'providerName', 'adapterType',
+        'apiBaseUrl', 'apiUsername', 'encryptedApiToken', 'encryptedApiKey',
+        'encryptedApiSecret', 'callbackUrl', 'webhookSecretHash', 'status',
+        'mode', 'lastVerifiedBalanceInr', 'updatedAt'
+      ]) &&
+      isValidId(data.credentialId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.providerName is string && data.providerName.size() >= 2 && data.providerName.size() <= 80 &&
+      data.adapterType in ['standard_rest', 'cyrus_compatible', 'ezulix_compatible', 'custom_json'] &&
+      data.apiBaseUrl is string && data.apiBaseUrl.size() >= 8 && data.apiBaseUrl.size() <= 250 &&
+      data.apiUsername is string && data.apiUsername.size() >= 1 && data.apiUsername.size() <= 120 &&
+      data.encryptedApiToken is string && data.encryptedApiToken.size() >= 4 && data.encryptedApiToken.size() <= 512 &&
+      data.encryptedApiKey is string && data.encryptedApiKey.size() >= 4 && data.encryptedApiKey.size() <= 512 &&
+      data.encryptedApiSecret is string && data.encryptedApiSecret.size() >= 4 && data.encryptedApiSecret.size() <= 512 &&
+      data.callbackUrl is string && data.callbackUrl.size() >= 8 && data.callbackUrl.size() <= 250 &&
+      data.webhookSecretHash is string && data.webhookSecretHash.size() >= 4 && data.webhookSecretHash.size() <= 256 &&
+      data.status in ['pending_test', 'active', 'disabled', 'failed'] &&
+      data.mode in ['test', 'live'] &&
+      data.lastVerifiedBalanceInr is number && data.lastVerifiedBalanceInr >= 0 &&
+      data.updatedAt is timestamp;
+    }
+
+    // 14. PaymentGatewayCredential
+    function isValidPaymentGatewayCredential(data, tenantId) {
+      return data.keys().hasAll([
+        'gatewayId', 'tenantId', 'ownerUid', 'gatewayProvider', 'merchantId',
+        'encryptedKeyId', 'encryptedKeySecret', 'webhookSecretHash',
+        'mode', 'status', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'gatewayId', 'tenantId', 'ownerUid', 'gatewayProvider', 'merchantId',
+        'encryptedKeyId', 'encryptedKeySecret', 'webhookSecretHash',
+        'mode', 'status', 'updatedAt'
+      ]) &&
+      isValidId(data.gatewayId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.gatewayProvider in ['razorpay', 'cashfree', 'paytm', 'phonepe', 'custom_upi'] &&
+      data.merchantId is string && data.merchantId.size() >= 2 && data.merchantId.size() <= 120 &&
+      data.encryptedKeyId is string && data.encryptedKeyId.size() >= 4 && data.encryptedKeyId.size() <= 512 &&
+      data.encryptedKeySecret is string && data.encryptedKeySecret.size() >= 4 && data.encryptedKeySecret.size() <= 512 &&
+      data.webhookSecretHash is string && data.webhookSecretHash.size() >= 4 && data.webhookSecretHash.size() <= 256 &&
+      data.mode in ['test', 'live'] &&
+      data.status in ['active', 'disabled'] &&
+      data.updatedAt is timestamp;
+    }
+
+    // 15. Wallet
+    function isValidWallet(data, tenantId) {
+      return data.keys().hasAll([
+        'walletId', 'tenantId', 'ownerUid', 'accountType', 'balanceInr', 'currency', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'walletId', 'tenantId', 'ownerUid', 'accountType', 'balanceInr', 'currency', 'updatedAt'
+      ]) &&
+      isValidId(data.walletId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.accountType in ['customer_wallet', 'retailer_wallet', 'client_settlement'] &&
+      data.balanceInr is number && data.balanceInr >= 0 && data.balanceInr <= 10000000 &&
+      data.currency == 'INR' &&
+      data.updatedAt is timestamp;
+    }
+
+    // 16. WalletLedger
+    function isValidWalletLedger(data, tenantId) {
+      return data.keys().hasAll([
+        'ledgerId', 'tenantId', 'ownerUid', 'walletId', 'txReferenceId',
+        'entryType', 'amountInr', 'openingBalanceInr', 'closingBalanceInr',
+        'remarks', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ledgerId', 'tenantId', 'ownerUid', 'walletId', 'txReferenceId',
+        'entryType', 'amountInr', 'openingBalanceInr', 'closingBalanceInr',
+        'remarks', 'createdAt'
+      ]) &&
+      isValidId(data.ledgerId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      isValidId(data.walletId) &&
+      data.txReferenceId is string && data.txReferenceId.size() >= 2 && data.txReferenceId.size() <= 128 &&
+      data.entryType in ['topup_credit', 'recharge_debit', 'refund_credit', 'commission_credit'] &&
+      data.amountInr is number && data.amountInr > 0 && data.amountInr <= 10000000 &&
+      data.openingBalanceInr is number && data.openingBalanceInr >= 0 &&
+      data.closingBalanceInr is number && data.closingBalanceInr >= 0 &&
+      data.remarks is string && data.remarks.size() >= 2 && data.remarks.size() <= 240 &&
+      data.createdAt is timestamp;
+    }
+
+    // 17. RechargeTransaction
+    function isValidRechargeTransaction(data, tenantId) {
+      return data.keys().hasAll([
+        'txId', 'tenantId', 'userUid', 'actorRole', 'serviceType',
+        'operatorCode', 'circleCode', 'targetNumber', 'amountInr',
+        'status', 'apiProvider', 'redactedApiResponse', 'idempotencyKey',
+        'createdAt', 'completedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'txId', 'tenantId', 'userUid', 'actorRole', 'serviceType',
+        'operatorCode', 'circleCode', 'targetNumber', 'amountInr',
+        'status', 'apiProvider', 'redactedApiResponse', 'idempotencyKey',
+        'createdAt', 'completedAt'
+      ]) &&
+      isValidId(data.txId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.userUid) &&
+      data.actorRole in ['customer', 'retailer'] &&
+      data.serviceType in ['mobile_prepaid', 'mobile_postpaid', 'dth'] &&
+      data.operatorCode is string && data.operatorCode.size() >= 2 && data.operatorCode.size() <= 50 &&
+      data.circleCode is string && data.circleCode.size() >= 2 && data.circleCode.size() <= 50 &&
+      data.targetNumber is string && data.targetNumber.size() >= 5 && data.targetNumber.size() <= 40 &&
+      data.amountInr is number && data.amountInr > 0 && data.amountInr <= 500000 &&
+      data.status in ['Initiated', 'Processing', 'Pending', 'Successful', 'Failed', 'Refunded'] &&
+      data.apiProvider is string && data.apiProvider.size() >= 2 && data.apiProvider.size() <= 80 &&
+      data.redactedApiResponse is string && data.redactedApiResponse.size() >= 2 && data.redactedApiResponse.size() <= 500 &&
+      data.idempotencyKey is string && data.idempotencyKey.size() >= 6 && data.idempotencyKey.size() <= 128 &&
+      data.createdAt is timestamp &&
+      data.completedAt is string && data.completedAt.size() >= 1 && data.completedAt.size() <= 40;
+    }
+
+    // 18. BillPayment
+    function isValidBillPayment(data, tenantId) {
+      return data.keys().hasAll([
+        'billTxId', 'tenantId', 'userUid', 'bbpsCategory', 'billerId',
+        'consumerNumber', 'customerName', 'amountInr', 'bbpsReferenceNo',
+        'status', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'billTxId', 'tenantId', 'userUid', 'bbpsCategory', 'billerId',
+        'consumerNumber', 'customerName', 'amountInr', 'bbpsReferenceNo',
+        'status', 'createdAt'
+      ]) &&
+      isValidId(data.billTxId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.userUid) &&
+      data.bbpsCategory in ['electricity', 'gas', 'water', 'broadband', 'landline', 'insurance'] &&
+      data.billerId is string && data.billerId.size() >= 2 && data.billerId.size() <= 80 &&
+      data.consumerNumber is string && data.consumerNumber.size() >= 4 && data.consumerNumber.size() <= 60 &&
+      data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 120 &&
+      data.amountInr is number && data.amountInr > 0 && data.amountInr <= 1000000 &&
+      data.bbpsReferenceNo is string && data.bbpsReferenceNo.size() >= 4 && data.bbpsReferenceNo.size() <= 100 &&
+      data.status in ['Initiated', 'Processing', 'Pending', 'Successful', 'Failed', 'Refunded'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 19. Commission
+    function isValidCommission(data, tenantId) {
+      return data.keys().hasAll([
+        'commissionId', 'tenantId', 'ownerUid', 'operatorCode', 'serviceType',
+        'retailerCommissionPercent', 'flatSurchargeInr', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'commissionId', 'tenantId', 'ownerUid', 'operatorCode', 'serviceType',
+        'retailerCommissionPercent', 'flatSurchargeInr', 'updatedAt'
+      ]) &&
+      isValidId(data.commissionId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.ownerUid) &&
+      data.operatorCode is string && data.operatorCode.size() >= 2 && data.operatorCode.size() <= 50 &&
+      data.serviceType in ['mobile_prepaid', 'mobile_postpaid', 'dth', 'bbps'] &&
+      data.retailerCommissionPercent is number && data.retailerCommissionPercent >= 0 && data.retailerCommissionPercent <= 25 &&
+      data.flatSurchargeInr is number && data.flatSurchargeInr >= 0 && data.flatSurchargeInr <= 500 &&
+      data.updatedAt is timestamp;
+    }
+
+    // 20. Notification
+    function isValidNotification(data, tenantId) {
+      return data.keys().hasAll([
+        'notificationId', 'tenantId', 'recipientUid', 'channel', 'eventType',
+        'subject', 'messageBody', 'deliveryStatus', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'notificationId', 'tenantId', 'recipientUid', 'channel', 'eventType',
+        'subject', 'messageBody', 'deliveryStatus', 'createdAt'
+      ]) &&
+      isValidId(data.notificationId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.recipientUid) &&
+      data.channel in ['sms', 'email', 'whatsapp', 'fcm_push'] &&
+      data.eventType in [
+        'registration', 'login_otp', 'subscription_payment', 'subscription_expiry',
+        'recharge_success', 'recharge_pending', 'recharge_failure', 'refund',
+        'wallet_addition', 'new_offer'
+      ] &&
+      data.subject is string && data.subject.size() >= 2 && data.subject.size() <= 160 &&
+      data.messageBody is string && data.messageBody.size() >= 2 && data.messageBody.size() <= 500 &&
+      data.deliveryStatus in ['queued', 'sent', 'delivered', 'failed'] &&
+      data.createdAt is timestamp;
+    }
+
+    // 21. SupportTicket
+    function isValidSupportTicket(data, tenantId) {
+      return data.keys().hasAll([
+        'ticketId', 'tenantId', 'creatorUid', 'relatedTxId', 'subject',
+        'description', 'priority', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ticketId', 'tenantId', 'creatorUid', 'relatedTxId', 'subject',
+        'description', 'priority', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.ticketId) &&
+      data.tenantId == tenantId &&
+      isValidId(data.creatorUid) &&
+      data.relatedTxId is string && data.relatedTxId.size() >= 1 && data.relatedTxId.size() <= 128 &&
+      data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 160 &&
+      data.description is string && data.description.size() >= 5 && data.description.size() <= 500 &&
+      data.priority in ['low', 'medium', 'high', 'urgent'] &&
+      data.status in ['open', 'in_progress', 'resolved', 'closed'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // 22. Invoice
+    function isValidInvoice(data) {
+      return data.keys().hasAll([
+        'invoiceId', 'tenantId', 'ownerUid', 'paymentId', 'invoiceNumber',
+        'subtotalInr', 'gstInr', 'totalInr', 'status', 'issuedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'invoiceId', 'tenantId', 'ownerUid', 'paymentId', 'invoiceNumber',
+        'subtotalInr', 'gstInr', 'totalInr', 'status', 'issuedAt'
+      ]) &&
+      isValidId(data.invoiceId) &&
+      isValidId(data.tenantId) &&
+      isValidId(data.ownerUid) &&
+      isValidId(data.paymentId) &&
+      data.invoiceNumber is string && data.invoiceNumber.size() >= 3 && data.invoiceNumber.size() <= 64 &&
+      data.subtotalInr is number && data.subtotalInr >= 0 && data.subtotalInr <= 1000000 &&
+      data.gstInr is number && data.gstInr >= 0 && data.gstInr <= 500000 &&
+      data.totalInr is number && data.totalInr >= 0 && data.totalInr <= 1500000 &&
+      data.status in ['paid', 'unpaid', 'void'] &&
+      data.issuedAt is timestamp;
+    }
+
+    // 23. AuditLog
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+        'logId', 'tenantId', 'actorUid', 'actorEmail', 'action',
+        'targetResource', 'details', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'logId', 'tenantId', 'actorUid', 'actorEmail', 'action',
+        'targetResource', 'details', 'createdAt'
+      ]) &&
+      isValidId(data.logId) &&
+      isValidId(data.tenantId) &&
+      isValidId(data.actorUid) &&
+      data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 160 &&
+      data.action is string && data.action.size() >= 3 && data.action.size() <= 120 &&
+      data.targetResource is string && data.targetResource.size() >= 2 && data.targetResource.size() <= 160 &&
+      data.details is string && data.details.size() >= 2 && data.details.size() <= 500 &&
+      data.createdAt is timestamp;
+    }
+
+    // ---------------------------------------------------------------------------
+    // ADMINS REGISTRY & ALL 23 COLLECTION MATCH BLOCKS
+    // ---------------------------------------------------------------------------
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isMasterAdmin());
+      allow list: if isMasterAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // 1. tenants
+    match /tenants/{tenantId} {
+      allow get: if isSignedIn() && isValidId(tenantId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(tenantId) &&
+        isValidTenant(incoming()) &&
+        incoming().tenantId == tenantId &&
+        (incoming().ownerUid == request.auth.uid || isMasterAdmin()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(tenantId) &&
+        isValidTenant(incoming()) &&
+        incoming().tenantId == existing().tenantId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isMasterAdmin() ||
+          (existing().ownerUid == request.auth.uid &&
+           incoming().diff(existing()).affectedKeys().hasOnly([
+             'businessName', 'ownerName', 'email', 'phone', 'customDomain',
+             'status', 'subscriptionPlanId', 'subscriptionStatus', 'subscriptionExpiresAt',
+             'primaryColor', 'secondaryColor', 'logoText', 'apiProviderStatus',
+             'businessAddress', 'country', 'state', 'city', 'passwordHash', 'notes', 'updatedAt'
+           ]))
+        );
+      allow delete: if isMasterAdmin() && isValidId(tenantId);
+
+      // 3. tenant_settings
+      match /tenant_settings/{settingId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(settingId) && (isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(settingId) &&
+          isValidTenantSetting(incoming(), tenantId) &&
+          incoming().settingId == settingId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(settingId) &&
+          isValidTenantSetting(incoming(), tenantId) &&
+          incoming().settingId == existing().settingId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(settingId) && isMasterAdmin();
+      }
+
+      // 4. tenant_subscriptions
+      match /tenant_subscriptions/{subscriptionId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(subscriptionId) && (isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(subscriptionId) &&
+          isValidTenantSubscription(incoming(), tenantId) &&
+          incoming().subscriptionId == subscriptionId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(subscriptionId) &&
+          isValidTenantSubscription(incoming(), tenantId) &&
+          incoming().subscriptionId == existing().subscriptionId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isMasterAdmin() ||
+           (isTenantOwner(tenantId) && incoming().diff(existing()).affectedKeys().hasOnly(['autoRenew', 'updatedAt'])));
+        allow delete: if isValidId(tenantId) && isValidId(subscriptionId) && isMasterAdmin();
+      }
+
+      // 8. customers
+      match /customers/{customerId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(customerId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(customerId) &&
+          isValidCustomer(incoming(), tenantId) &&
+          incoming().customerId == customerId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(customerId) &&
+          isValidCustomer(incoming(), tenantId) &&
+          incoming().customerId == existing().customerId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().createdAt == existing().createdAt &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(customerId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 9. retailers
+      match /retailers/{retailerId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(retailerId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(retailerId) &&
+          isValidRetailer(incoming(), tenantId) &&
+          incoming().retailerId == retailerId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(retailerId) &&
+          isValidRetailer(incoming(), tenantId) &&
+          incoming().retailerId == existing().retailerId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().createdAt == existing().createdAt &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(retailerId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 10. staff
+      match /staff/{staffId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(staffId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(staffId) &&
+          isValidStaff(incoming(), tenantId) &&
+          incoming().staffId == staffId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(staffId) &&
+          isValidStaff(incoming(), tenantId) &&
+          incoming().staffId == existing().staffId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().createdAt == existing().createdAt &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(staffId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 11. roles
+      match /roles/{roleId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(roleId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(roleId) &&
+          isValidRole(incoming(), tenantId) &&
+          incoming().roleId == roleId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(roleId) &&
+          isValidRole(incoming(), tenantId) &&
+          incoming().roleId == existing().roleId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().createdAt == existing().createdAt &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(roleId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 12. permissions
+      match /permissions/{permissionId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(permissionId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(permissionId) &&
+          isValidPermission(incoming(), tenantId) &&
+          incoming().permissionId == permissionId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(permissionId) &&
+          isValidPermission(incoming(), tenantId) &&
+          incoming().permissionId == existing().permissionId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(permissionId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 13. recharge_api_credentials (Strict Tenant Owner Isolation)
+      match /recharge_api_credentials/{credentialId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(credentialId) && (isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(credentialId) &&
+          isValidRechargeApiCredential(incoming(), tenantId) &&
+          incoming().credentialId == credentialId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(credentialId) &&
+          isValidRechargeApiCredential(incoming(), tenantId) &&
+          incoming().credentialId == existing().credentialId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(credentialId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 14. payment_gateway_credentials (Strict Tenant Owner Isolation)
+      match /payment_gateway_credentials/{gatewayId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(gatewayId) && (isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(gatewayId) &&
+          isValidPaymentGatewayCredential(incoming(), tenantId) &&
+          incoming().gatewayId == gatewayId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(gatewayId) &&
+          isValidPaymentGatewayCredential(incoming(), tenantId) &&
+          incoming().gatewayId == existing().gatewayId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(gatewayId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 15. wallets
+      match /wallets/{walletId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(walletId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(walletId) &&
+          isValidWallet(incoming(), tenantId) &&
+          incoming().walletId == walletId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(walletId) &&
+          isValidWallet(incoming(), tenantId) &&
+          incoming().walletId == existing().walletId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().accountType == existing().accountType &&
+          incoming().updatedAt == request.time && (
+            isMasterAdmin() ||
+            isTenantOwner(tenantId) ||
+            (existing().ownerUid == request.auth.uid &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['balanceInr', 'updatedAt']))
+          );
+        allow delete: if false;
+      }
+
+      // 16. wallet_ledger (Append-Only Double-Entry Ledger)
+      match /wallet_ledger/{ledgerId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(ledgerId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(ledgerId) &&
+          isValidWalletLedger(incoming(), tenantId) &&
+          incoming().ledgerId == ledgerId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update, delete: if false;
+      }
+
+      // 17. recharge_transactions
+      match /recharge_transactions/{txId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(txId) &&
+          (existing().userUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().userUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(txId) &&
+          isValidRechargeTransaction(incoming(), tenantId) &&
+          incoming().txId == txId &&
+          incoming().userUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(txId) &&
+          isValidRechargeTransaction(incoming(), tenantId) &&
+          incoming().txId == existing().txId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().userUid == existing().userUid &&
+          incoming().amountInr == existing().amountInr &&
+          incoming().createdAt == existing().createdAt && (
+            isMasterAdmin() ||
+            (!(existing().status in ['Successful', 'Refunded']) &&
+             (isTenantOwner(tenantId) || existing().userUid == request.auth.uid) &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'redactedApiResponse', 'completedAt']))
+          );
+        allow delete: if false;
+      }
+
+      // 18. bill_payments (BBPS Utility Bills)
+      match /bill_payments/{billTxId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(billTxId) &&
+          (existing().userUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().userUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(billTxId) &&
+          isValidBillPayment(incoming(), tenantId) &&
+          incoming().billTxId == billTxId &&
+          incoming().userUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(billTxId) &&
+          isValidBillPayment(incoming(), tenantId) &&
+          incoming().billTxId == existing().billTxId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().userUid == existing().userUid &&
+          incoming().amountInr == existing().amountInr &&
+          incoming().createdAt == existing().createdAt && (
+            isMasterAdmin() ||
+            (!(existing().status in ['Successful', 'Refunded']) &&
+             (isTenantOwner(tenantId) || existing().userUid == request.auth.uid) &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'bbpsReferenceNo']))
+          );
+        allow delete: if false;
+      }
+
+      // 19. commissions
+      match /commissions/{commissionId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(commissionId) &&
+          (existing().ownerUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().ownerUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(commissionId) &&
+          isValidCommission(incoming(), tenantId) &&
+          incoming().commissionId == commissionId &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(commissionId) &&
+          isValidCommission(incoming(), tenantId) &&
+          incoming().commissionId == existing().commissionId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().updatedAt == request.time &&
+          (isTenantOwner(tenantId) || isMasterAdmin());
+        allow delete: if isValidId(tenantId) && isValidId(commissionId) && (isTenantOwner(tenantId) || isMasterAdmin());
+      }
+
+      // 20. notifications
+      match /notifications/{notificationId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(notificationId) &&
+          (existing().recipientUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().recipientUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(notificationId) &&
+          isValidNotification(incoming(), tenantId) &&
+          incoming().notificationId == notificationId &&
+          incoming().recipientUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update, delete: if false;
+      }
+
+      // 21. support_tickets
+      match /support_tickets/{ticketId} {
+        allow get: if isSignedIn() && isValidId(tenantId) && isValidId(ticketId) &&
+          (existing().creatorUid == request.auth.uid || isTenantOwner(tenantId) || isMasterAdmin());
+        allow list: if isSignedIn() && isValidId(tenantId) &&
+          (existing().creatorUid == request.auth.uid || isMasterAdmin());
+        allow create: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(ticketId) &&
+          isValidSupportTicket(incoming(), tenantId) &&
+          incoming().ticketId == ticketId &&
+          incoming().creatorUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/tenants/$(tenantId));
+        allow update: if isSignedIn() &&
+          isValidId(tenantId) &&
+          isValidId(ticketId) &&
+          isValidSupportTicket(incoming(), tenantId) &&
+          incoming().ticketId == existing().ticketId &&
+          incoming().tenantId == existing().tenantId &&
+          incoming().creatorUid == existing().creatorUid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            isMasterAdmin() ||
+            isTenantOwner(tenantId) ||
+            (existing().creatorUid == request.auth.uid &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['description', 'status', 'updatedAt']))
+          );
+        allow delete: if isValidId(tenantId) && isValidId(ticketId) && isMasterAdmin();
+      }
+    }
+
+    // 2. tenant_domains
+    match /tenant_domains/{domainId} {
+      allow get: if isSignedIn() && isValidId(domainId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(domainId) &&
+        isValidTenantDomain(incoming()) &&
+        incoming().domainId == domainId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/tenants/$(incoming().tenantId));
+      allow update: if isSignedIn() &&
+        isValidId(domainId) &&
+        isValidTenantDomain(incoming()) &&
+        incoming().domainId == existing().domainId &&
+        incoming().tenantId == existing().tenantId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isMasterAdmin() ||
+         (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dnsVerified', 'sslStatus', 'status', 'updatedAt'])));
+      allow delete: if isValidId(domainId) && (isMasterAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+    }
+
+    // 5. subscription_plans
+    match /subscription_plans/{planId} {
+      allow get: if isSignedIn() && isValidId(planId);
+      allow list: if isSignedIn() && (existing().isActive == true || isMasterAdmin());
+      allow create: if isMasterAdmin() &&
+        isValidId(planId) &&
+        isValidSubscriptionPlan(incoming()) &&
+        incoming().planId == planId &&
+        incoming().updatedAt == request.time;
+      allow update: if isMasterAdmin() &&
+        isValidId(planId) &&
+        isValidSubscriptionPlan(incoming()) &&
+        incoming().planId == existing().planId &&
+        incoming().updatedAt == request.time;
+      allow delete: if isMasterAdmin() && isValidId(planId);
+    }
+
+    // 6. subscription_payments (Strictly Separated Platform Revenue)
+    match /subscription_payments/{paymentId} {
+      allow get: if isSignedIn() && isValidId(paymentId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(paymentId) &&
+        isValidSubscriptionPayment(incoming()) &&
+        incoming().paymentId == paymentId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/tenants/$(incoming().tenantId));
+      allow update: if isMasterAdmin() &&
+        isValidId(paymentId) &&
+        isValidSubscriptionPayment(incoming()) &&
+        incoming().paymentId == existing().paymentId &&
+        incoming().tenantId == existing().tenantId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    // 7. users
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUser(incoming()) &&
+        incoming().userId == userId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUser(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().tenantId == existing().tenantId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt && (
+          isMasterAdmin() ||
+          (existing().ownerUid == request.auth.uid &&
+           incoming().diff(existing()).affectedKeys().hasOnly(['displayName']))
+        );
+      allow delete: if isMasterAdmin() && isValidId(userId);
+    }
+
+    // 22. invoices
+    match /invoices/{invoiceId} {
+      allow get: if isSignedIn() && isValidId(invoiceId) && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(invoiceId) &&
+        isValidInvoice(incoming()) &&
+        incoming().invoiceId == invoiceId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().issuedAt == request.time &&
+        exists(/databases/$(database)/documents/tenants/$(incoming().tenantId));
+      allow update: if isMasterAdmin() &&
+        isValidId(invoiceId) &&
+        isValidInvoice(incoming()) &&
+        incoming().invoiceId == existing().invoiceId &&
+        incoming().tenantId == existing().tenantId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().issuedAt == existing().issuedAt;
+      allow delete: if false;
+    }
+
+    // 23. audit_logs (Immutable Platform & Tenant Audit Trail)
+    match /audit_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (existing().actorUid == request.auth.uid || isMasterAdmin());
+      allow list: if isSignedIn() && (existing().actorUid == request.auth.uid || isMasterAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        isValidAuditLog(incoming()) &&
+        incoming().logId == logId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

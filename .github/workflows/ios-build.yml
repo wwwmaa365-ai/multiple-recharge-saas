@@ -1,0 +1,180 @@
+name: iOS Build (IPA) — Recharge Expres SaaS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile_flutter/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'White-Label Application Display Name'
+        required: true
+        default: 'Recharge Expres'
+      bundle_id:
+        description: 'iOS Bundle Identifier'
+        required: true
+        default: 'in.rechargeexpres.app'
+      tenant_id:
+        description: 'Backend Tenant Identifier'
+        required: true
+        default: 'tenant_master_platform'
+      tenant_domain:
+        description: 'Tenant Custom Domain'
+        required: true
+        default: 'rechargeexpres.in'
+      primary_color_hex:
+        description: 'Brand Primary Hex Color (without #)'
+        required: true
+        default: '4F46E5'
+      environment:
+        description: 'Build Environment (production or development)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - development
+      publish_release:
+        description: 'Publish versioned GitHub Release (true/false)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      release_tag:
+        description: 'Release Version Tag (used only if publish_release is true)'
+        required: false
+        default: 'v1.0.0'
+
+env:
+  FLUTTER_WORKING_DIR: mobile_flutter
+  APP_NAME: ${{ github.event.inputs.app_name || 'Recharge Expres' }}
+  BUNDLE_ID: ${{ github.event.inputs.bundle_id || 'in.rechargeexpres.app' }}
+  TENANT_ID: ${{ github.event.inputs.tenant_id || 'tenant_master_platform' }}
+  TENANT_DOMAIN: ${{ github.event.inputs.tenant_domain || 'rechargeexpres.in' }}
+  PRIMARY_COLOR_HEX: ${{ github.event.inputs.primary_color_hex || '4F46E5' }}
+  APP_ENV: ${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  build-ios:
+    name: Build White-Label iOS IPA
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ${{ env.FLUTTER_WORKING_DIR }}
+
+    steps:
+      - name: 1. Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: 2. Install Flutter SDK (Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 3. Scaffold Missing iOS Platform Runner Files & Preserve Info.plist
+        run: |
+          if [ ! -d "ios/Runner.xcodeproj" ]; then
+            echo "Backing up white-label Info.plist and ExportOptions.plist before scaffolding..."
+            cp ios/Runner/Info.plist /tmp/wl_Info.plist
+            cp ios/ExportOptions.plist /tmp/wl_ExportOptions.plist
+            flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android,ios .
+            cp /tmp/wl_Info.plist ios/Runner/Info.plist
+            cp /tmp/wl_ExportOptions.plist ios/ExportOptions.plist
+          fi
+          plutil -replace CFBundleDisplayName -string "${{ env.APP_NAME }}" ios/Runner/Info.plist || true
+          plutil -replace CFBundleIdentifier -string "${{ env.BUNDLE_ID }}" ios/Runner/Info.plist || true
+
+      - name: 4. Install Flutter & CocoaPods Dependencies
+        run: |
+          flutter pub get
+
+      - name: 5. Run Automated Flutter Tests
+        run: flutter test
+
+      - name: 6. Check Apple Signing Secrets & Configure Keychain
+        id: ios_signing
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$IOS_CERTIFICATE_BASE64" ] && [ -n "$IOS_PROVISIONING_PROFILE_BASE64" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "Apple Developer signing secrets detected. Configuring temporary macOS Keychain..."
+            CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+            PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+            echo -n "$IOS_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+            echo -n "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+            security create-keychain -p "$IOS_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+            security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+            security import $CERTIFICATE_PATH -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+            security list-keychain -d user -s $KEYCHAIN_PATH
+
+            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+            cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+
+            echo "signed=true" >> $GITHUB_OUTPUT
+            echo "IOS_SIGNING_STATUS=SIGNED_DISTRIBUTABLE_IPA" >> $GITHUB_ENV
+          else
+            echo "NOTICE: Apple signing credentials (IOS_CERTIFICATE_BASE64, IOS_PROVISIONING_PROFILE_BASE64, APPLE_TEAM_ID) are NOT configured."
+            echo "Building unsigned iOS archive (--no-codesign). Note: A distributable signed IPA for physical iPhones/App Store requires Apple Developer signing credentials."
+            echo "signed=false" >> $GITHUB_OUTPUT
+            echo "IOS_SIGNING_STATUS=UNSIGNED_ARCHIVE_REQUIRES_APPLE_CREDENTIALS_FOR_DEVICE_INSTALL" >> $GITHUB_ENV
+          fi
+
+      - name: 7. Build Signed iOS IPA (When Apple Secrets Are Present)
+        if: steps.ios_signing.outputs.signed == 'true'
+        run: |
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist \
+            --dart-define=APP_NAME="${{ env.APP_NAME }}" \
+            --dart-define=PACKAGE_ID="${{ env.BUNDLE_ID }}" \
+            --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
+            --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
+            --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
+            --dart-define=APP_ENV="${{ env.APP_ENV }}"
+
+      - name: 8. Build Unsigned iOS Application Bundle (When Apple Secrets Are Absent)
+        if: steps.ios_signing.outputs.signed == 'false'
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=APP_NAME="${{ env.APP_NAME }}" \
+            --dart-define=PACKAGE_ID="${{ env.BUNDLE_ID }}" \
+            --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
+            --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
+            --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
+            --dart-define=APP_ENV="${{ env.APP_ENV }}"
+          mkdir -p build/ios/ipa/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r RechargeExpres-Unsigned.ipa Payload
+          rm -rf Payload
+
+      - name: 9. Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TENANT_ID }}-ios-ipa-${{ env.IOS_SIGNING_STATUS }}
+          path: ${{ env.FLUTTER_WORKING_DIR }}/build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 10. Display iOS Build Status Summary
+        run: |
+          echo "### Recharge Expres iOS Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application Name**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **iOS Bundle ID**: \`${{ env.BUNDLE_ID }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tenant ID**: \`${{ env.TENANT_ID }}\` (\`${{ env.TENANT_DOMAIN }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Signing Verdict**: \`${{ env.IOS_SIGNING_STATUS }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact Path**: \`build/ios/ipa/*.ipa\`" >> $GITHUB_STEP_SUMMARY
