@@ -77,14 +77,26 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 3. Install Flutter SDK (Stable)
+      - name: 3. Install Flutter SDK (Stable 3.24.5)
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
       - name: 4. Scaffold Platform Runner & Apply White-Label Android Config
         run: |
+          echo "Accepting Android SDK licenses and cleaning any broken runner NDK stubs..."
+          yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
+          if [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+            for ndk_dir in "$ANDROID_HOME/ndk"/*; do
+              if [ -d "$ndk_dir" ] && [ ! -f "$ndk_dir/source.properties" ]; then
+                echo "Removing incomplete NDK directory: $ndk_dir"
+                rm -rf "$ndk_dir"
+              fi
+            done
+          fi
+
           echo "Backing up white-label Dart source and tests before scaffolding..."
           mkdir -p /tmp/rx_android_backup
           cp -r lib /tmp/rx_android_backup/lib
@@ -101,6 +113,9 @@ jobs:
           cp -r /tmp/rx_android_backup/test/* test/
           cp /tmp/rx_android_backup/pubspec.yaml pubspec.yaml
           cp /tmp/rx_android_backup/analysis_options.yaml analysis_options.yaml
+
+          # Configure CI-optimized Gradle memory & daemon settings for GitHub Actions ubuntu-latest (7GB RAM)
+          printf "org.gradle.jvmargs=-Xmx3584M -XX:MaxMetaspaceSize=1G -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\nandroid.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.daemon=false\norg.gradle.parallel=true\n" > android/gradle.properties
 
           # Inject white-label PACKAGE_ID into the generated build.gradle.kts or build.gradle
           if [ -f "android/app/build.gradle.kts" ]; then
@@ -148,23 +163,37 @@ jobs:
 
       - name: 9. Build Release APK
         run: |
-          flutter build apk --release \
+          set -o pipefail
+          if ! flutter build apk --release --no-tree-shake-icons \
             --dart-define=APP_NAME="${{ env.APP_NAME }}" \
             --dart-define=PACKAGE_ID="${{ env.PACKAGE_ID }}" \
             --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
             --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
             --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
-            --dart-define=APP_ENV="${{ env.APP_ENV }}"
+            --dart-define=APP_ENV="${{ env.APP_ENV }}" 2>&1 | tee /tmp/apk_build.log; then
+            echo "===================================================="
+            echo "EXACT GRADLE FAILURE SUMMARY (MOBILE VIEW):"
+            echo "===================================================="
+            grep -A 25 -E "What went wrong:|FAILURE:|Exception:" /tmp/apk_build.log || tail -n 40 /tmp/apk_build.log
+            exit 1
+          fi
 
       - name: 10. Build Release App Bundle (AAB)
         run: |
-          flutter build appbundle --release \
+          set -o pipefail
+          if ! flutter build appbundle --release --no-tree-shake-icons \
             --dart-define=APP_NAME="${{ env.APP_NAME }}" \
             --dart-define=PACKAGE_ID="${{ env.PACKAGE_ID }}" \
             --dart-define=TENANT_ID="${{ env.TENANT_ID }}" \
             --dart-define=TENANT_DOMAIN="${{ env.TENANT_DOMAIN }}" \
             --dart-define=PRIMARY_COLOR_HEX="${{ env.PRIMARY_COLOR_HEX }}" \
-            --dart-define=APP_ENV="${{ env.APP_ENV }}"
+            --dart-define=APP_ENV="${{ env.APP_ENV }}" 2>&1 | tee /tmp/aab_build.log; then
+            echo "===================================================="
+            echo "EXACT GRADLE AAB FAILURE SUMMARY (MOBILE VIEW):"
+            echo "===================================================="
+            grep -A 25 -E "What went wrong:|FAILURE:|Exception:" /tmp/aab_build.log || tail -n 40 /tmp/aab_build.log
+            exit 1
+          fi
 
       - name: 11. Upload Android APK Artifact
         uses: actions/upload-artifact@v4

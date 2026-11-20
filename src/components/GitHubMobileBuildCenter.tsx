@@ -50,15 +50,16 @@ interface GeneratedFileSpec {
 const GENERATED_PROJECT_FILES: GeneratedFileSpec[] = [
   {
     path: '.github/workflows/android-build.yml',
-    title: 'Android APK & AAB Cloud Build Workflow (Fixed White-Label Preservation)',
+    title: 'Android APK & AAB Cloud Build Workflow (Pinned Flutter 3.24.5 + Clean Gradle Scaffolding)',
     category: 'GitHub Actions Workflow',
     description:
-      'Ubuntu runner workflow triggered via mobile browser workflow_dispatch or push to main. Preserves white-label build.gradle and AndroidManifest.xml during scaffolding, then builds and uploads APK and AAB artifacts.',
+      'Complete Ubuntu runner workflow triggered via mobile browser workflow_dispatch or push to main. Pins Flutter 3.24.5, cleans runner NDK stubs, scaffolds a clean Gradle project, patches white-label PACKAGE_ID and APP_NAME, and uploads APK & AAB artifacts.',
     content: `name: Android Build (APK & AAB) — Recharge Expres SaaS
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths:
       - 'mobile_flutter/**'
       - '.github/workflows/android-build.yml'
@@ -77,20 +78,154 @@ on:
         required: true
         default: 'tenant_master_platform'
       tenant_domain:
-        description: 'Tenant Custom Domain'
+        description: 'Tenant Custom Domain (Host header)'
         required: true
         default: 'rechargeexpres.in'
       primary_color_hex:
         description: 'Brand Primary Hex Color (without #)'
         required: true
-        default: '4F46E5'`,
+        default: '4F46E5'
+      environment:
+        description: 'Build Environment (production or development)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - development
+      publish_release:
+        description: 'Publish versioned GitHub Release (true/false)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      release_tag:
+        description: 'Release Version Tag (used only if publish_release is true)'
+        required: false
+        default: 'v1.0.0'
+
+env:
+  FLUTTER_WORKING_DIR: mobile_flutter
+  APP_NAME: \${{ github.event.inputs.app_name || 'Recharge Expres' }}
+  PACKAGE_ID: \${{ github.event.inputs.package_id || 'in.rechargeexpres.app' }}
+  TENANT_ID: \${{ github.event.inputs.tenant_id || 'tenant_master_platform' }}
+  TENANT_DOMAIN: \${{ github.event.inputs.tenant_domain || 'rechargeexpres.in' }}
+  PRIMARY_COLOR_HEX: \${{ github.event.inputs.primary_color_hex || '4F46E5' }}
+  APP_ENV: \${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  build-android:
+    name: Build White-Label Android APK & AAB
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: \${{ env.FLUTTER_WORKING_DIR }}
+
+    steps:
+      - name: 1. Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: 2. Install Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3. Install Flutter SDK (Stable 3.24.5)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: 4. Scaffold Platform Runner & Apply White-Label Android Config
+        run: |
+          yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
+          if [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+            for ndk_dir in "$ANDROID_HOME/ndk"/*; do
+              if [ -d "$ndk_dir" ] && [ ! -f "$ndk_dir/source.properties" ]; then
+                rm -rf "$ndk_dir"
+              fi
+            done
+          fi
+          mkdir -p /tmp/rx_android_backup
+          cp -r lib /tmp/rx_android_backup/lib
+          cp -r test /tmp/rx_android_backup/test
+          cp pubspec.yaml /tmp/rx_android_backup/pubspec.yaml
+          cp analysis_options.yaml /tmp/rx_android_backup/analysis_options.yaml
+          rm -rf android
+          flutter create --org in.rechargeexpres --project-name recharge_expres_mobile --platforms=android .
+          cp -r /tmp/rx_android_backup/lib/* lib/
+          cp -r /tmp/rx_android_backup/test/* test/
+          cp /tmp/rx_android_backup/pubspec.yaml pubspec.yaml
+          cp /tmp/rx_android_backup/analysis_options.yaml analysis_options.yaml
+          printf "org.gradle.jvmargs=-Xmx3584M -XX:MaxMetaspaceSize=1G -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\\nandroid.useAndroidX=true\\nandroid.enableJetifier=true\\norg.gradle.daemon=false\\norg.gradle.parallel=true\\n" > android/gradle.properties
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's|applicationId = "in.rechargeexpres.recharge_expres_mobile"|applicationId = "'"\${PACKAGE_ID}"'"|g' android/app/build.gradle.kts
+          fi
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i 's|applicationId "in.rechargeexpres.recharge_expres_mobile"|applicationId "'"\${PACKAGE_ID}"'"|g' android/app/build.gradle
+            sed -i 's|applicationId = "in.rechargeexpres.recharge_expres_mobile"|applicationId = "'"\${PACKAGE_ID}"'"|g' android/app/build.gradle
+          fi
+          sed -i 's|android:label="recharge_expres_mobile"|android:label="'"\${APP_NAME}"'"|g' android/app/src/main/AndroidManifest.xml
+          chmod +x android/gradlew
+
+      - name: 5. Configure Android Release Signing
+        run: echo "SIGNING_STATUS=UNSIGNED_TESTING_BUILD_NOT_PLAY_STORE_READY" >> $GITHUB_ENV
+
+      - name: 6. Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: 7. Run Flutter Static Analyzer
+        run: flutter analyze
+
+      - name: 8. Run Automated Flutter Tests
+        run: flutter test
+
+      - name: 9. Build Release APK
+        run: |
+          flutter build apk --release --no-tree-shake-icons \\
+            --dart-define=APP_NAME="\${{ env.APP_NAME }}" \\
+            --dart-define=PACKAGE_ID="\${{ env.PACKAGE_ID }}" \\
+            --dart-define=TENANT_ID="\${{ env.TENANT_ID }}" \\
+            --dart-define=TENANT_DOMAIN="\${{ env.TENANT_DOMAIN }}" \\
+            --dart-define=PRIMARY_COLOR_HEX="\${{ env.PRIMARY_COLOR_HEX }}" \\
+            --dart-define=APP_ENV="\${{ env.APP_ENV }}"
+
+      - name: 10. Build Release App Bundle (AAB)
+        run: |
+          flutter build appbundle --release --no-tree-shake-icons \\
+            --dart-define=APP_NAME="\${{ env.APP_NAME }}" \\
+            --dart-define=PACKAGE_ID="\${{ env.PACKAGE_ID }}" \\
+            --dart-define=TENANT_ID="\${{ env.TENANT_ID }}" \\
+            --dart-define=TENANT_DOMAIN="\${{ env.TENANT_DOMAIN }}" \\
+            --dart-define=PRIMARY_COLOR_HEX="\${{ env.PRIMARY_COLOR_HEX }}" \\
+            --dart-define=APP_ENV="\${{ env.APP_ENV }}"
+
+      - name: 11. Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: \${{ env.TENANT_ID }}-android-apk-\${{ env.SIGNING_STATUS }}
+          path: \${{ env.FLUTTER_WORKING_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 12. Upload Android AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: \${{ env.TENANT_ID }}-android-aab-\${{ env.SIGNING_STATUS }}
+          path: \${{ env.FLUTTER_WORKING_DIR }}/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30`,
   },
   {
     path: '.github/workflows/ios-build.yml',
-    title: 'iOS IPA Cloud Build Workflow (macOS + Xcode)',
+    title: 'iOS IPA Cloud Build Workflow (macOS + Xcode + Pinned Flutter 3.24.5)',
     category: 'GitHub Actions Workflow',
     description:
-      'macOS runner workflow that preserves custom Info.plist, configures Apple signing via IOS_CERTIFICATE_BASE64 / APPLE_TEAM_ID (or creates an unsigned archive if secrets are absent), and uploads the IPA artifact.',
+      'macOS runner workflow that pins Flutter 3.24.5, scaffolds a clean iOS Xcode project, injects CFBundleDisplayName and CFBundleIdentifier via plutil, and uploads the IPA artifact.',
     content: `name: iOS Build (IPA) — Recharge Expres SaaS
 
 on:

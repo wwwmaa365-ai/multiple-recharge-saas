@@ -71,9 +71,10 @@ jobs:
       - name: 1. Checkout Repository Source Code
         uses: actions/checkout@v4
 
-      - name: 2. Install Flutter SDK (Stable)
+      - name: 2. Install Flutter SDK (Stable 3.24.5)
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
